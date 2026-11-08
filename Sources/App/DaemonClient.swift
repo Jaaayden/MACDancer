@@ -1,541 +1,180 @@
 import Foundation
 
-private enum DaemonTransportError: LocalizedError {
-  case timeout(seconds: Int)
-  case proxy(String)
-  case emptyReply
-
-  var errorDescription: String? {
-    switch self {
-    case let .timeout(seconds):
-      "The background service did not reply within \(seconds) seconds."
-    case let .proxy(message):
-      message
-    case .emptyReply:
-      "The background service returned an empty response."
-    }
-  }
-}
-
-/// Thin, authenticated client for the privileged daemon.
+/// XPC client for the privileged daemon.
 ///
-/// Every command is wrapped in `OperationEnvelope`, receives a bounded XPC
-/// reply, and is deliberately *not* retried after an interruption.  Retrying a
-/// destructive request would risk applying it twice.  Only the idempotent
-/// snapshot subscription is retried with backoff.
+/// Requests are never retried: replaying a MAC change could apply it twice.
+/// Only the connection itself is re-established, with backoff.
 @MainActor
 final class DaemonClient: NSObject, DaemonClientProviding {
-  typealias SnapshotHandler = @MainActor (DaemonSnapshot) -> Void
-  typealias StatusHandler = @MainActor (DaemonClientStatus) -> Void
+  var onSnapshot: ((DaemonSnapshot) -> Void)?
+  var onConnectionChange: ((ConnectionState) -> Void)?
 
-  var onSnapshot: SnapshotHandler?
-  var onStatusChange: StatusHandler?
-
-  private let machServiceName: String
-  private let signingRequirementProvider: @Sendable (String) -> String?
-  private let requestTimeout: TimeInterval
-  private var signingRequirement: String?
-  private var callbackListener: NSXPCListener?
-  private var callbackReceiver: DaemonCallbackReceiver?
+  /// Status requests are answered at once by the daemon.
+  private let quickTimeout: TimeInterval = 8
+  /// Writes may disconnect Wi-Fi, run ifconfig and wait for the read-back.
+  private let writeTimeout: TimeInterval = 60
+  private let heartbeatInterval: Duration = .seconds(20)
 
   private var connection: NSXPCConnection?
-  private var transportPreparationTask: Task<Void, Never>?
-  private var reconnectTask: Task<Void, Never>?
-  private var heartbeatTask: Task<Void, Never>?
-  private var wantsSubscription = false
+  private var wanted = false
+  private var supervisor: Task<Void, Never>?
   private var retryDelay: TimeInterval = 1
-  private var snapshotTracker = SnapshotRevisionTracker()
-  private(set) var status = DaemonClientStatus()
-
-  init(
-    machServiceName: String = MACDancerConstants.daemonIdentifier,
-    signingRequirementProvider: @escaping @Sendable (String) -> String? = { identifier in
-      CodeSigningIdentity.requirement(identifier: identifier)
-    },
-    requestTimeout: TimeInterval = 5
-  ) {
-    self.machServiceName = machServiceName
-    self.signingRequirementProvider = signingRequirementProvider
-    self.requestTimeout = requestTimeout
-    super.init()
+  /// True between a successful subscribe and the next failure.
+  private var subscribed = false
+  private var state: ConnectionState = .idle {
+    didSet { if state != oldValue { onConnectionChange?(state) } }
   }
-
-  deinit {
-    transportPreparationTask?.cancel()
-    reconnectTask?.cancel()
-    heartbeatTask?.cancel()
-    connection?.invalidate()
-    callbackListener?.invalidate()
+  private lazy var receiver = SnapshotReceiver { [weak self] payload in
+    Task { @MainActor in self?.receive(payload) }
   }
 
   func start() {
-    wantsSubscription = true
-    if callbackListener != nil {
-      if reconnectTask == nil { subscribeWithRetry() }
-      startHeartbeatMonitor()
-      return
-    }
-    guard transportPreparationTask == nil else { return }
-
-    let identifier = machServiceName
-    let provider = signingRequirementProvider
-    transportPreparationTask = Task { @MainActor [weak self] in
-      let requirement = await Task.detached(priority: .utility) {
-        provider(identifier)
-      }.value
-      guard let self else { return }
-      self.transportPreparationTask = nil
-      guard self.wantsSubscription, !Task.isCancelled else { return }
-      guard let requirement else {
-        let error = MACDancerError.daemonUnavailable(
-          "MACDancer could not determine its code-signing identity, so it will not connect to a privileged daemon."
-        )
-        self.publishStatus(
-          reachability: .unavailable,
-          health: .unhealthy,
-          version: nil,
-          diagnostic: error.localizedDescription
-        )
-        return
-      }
-      self.prepareCallbackTransport(signingRequirement: requirement)
-      self.subscribeWithRetry()
-      self.startHeartbeatMonitor()
-    }
+    guard !wanted else { return }
+    wanted = true
+    supervisor = Task { [weak self] in await self?.supervise() }
   }
 
   func stop() {
-    wantsSubscription = false
-    transportPreparationTask?.cancel()
-    transportPreparationTask = nil
-    reconnectTask?.cancel()
-    reconnectTask = nil
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
+    wanted = false
+    subscribed = false
+    supervisor?.cancel()
+    supervisor = nil
     connection?.invalidate()
     connection = nil
-    publishStatus(reachability: .unknown, health: .unknown, version: nil, diagnostic: nil)
+    state = .idle
   }
 
-  func ping() async throws -> DaemonSnapshot {
-    try await perform { daemon, reply in
-      daemon.ping(reply)
-    }
-  }
-
-  func getSnapshot() async throws -> DaemonSnapshot {
-    try await perform { daemon, reply in
-      daemon.getSnapshot(reply)
-    }
-  }
-
-  func subscribe() async throws -> DaemonSnapshot {
-    guard let callbackListener else {
-      throw MACDancerError.daemonUnavailable("The authenticated callback channel is not ready.")
-    }
-    let endpoint = callbackListener.endpoint
-    return try await perform { daemon, reply in
-      daemon.subscribe(endpoint, reply: reply)
-    }
-  }
-
-  func setPolicy(_ request: PolicyRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.setPolicy(payload, reply: reply)
-    }
-  }
-
-  func randomize(_ request: RandomizeRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.randomizeNow(payload, reply: reply)
-    }
-  }
-
-  func restore(_ request: RestoreRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.restore(payload, reply: reply)
-    }
-  }
-
-  func cancel(_ request: CancelRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.cancelPendingOperations(payload, reply: reply)
-    }
-  }
-
-  func updateHistory(_ request: HistoryMutationRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.updateHistory(payload, reply: reply)
-    }
-  }
-
-  func updateAutomation(_ request: AutomationRequest, operationID: UUID = UUID()) async throws -> DaemonSnapshot {
-    let payload = try MDSecurePayload(OperationEnvelope(operationID: operationID, request: request))
-    return try await perform { daemon, reply in
-      daemon.updateAutomation(payload, reply: reply)
-    }
-  }
-
-  private func startHeartbeatMonitor() {
-    guard heartbeatTask == nil else { return }
-    heartbeatTask = Task { @MainActor [weak self] in
-      while let self, !Task.isCancelled, self.wantsSubscription {
-        do {
-          try await Task.sleep(for: .seconds(15))
-          guard !Task.isCancelled, self.wantsSubscription else { break }
-          _ = try await self.ping()
-        } catch is CancellationError {
-          break
-        } catch {
-          // Transport failures are classified by `perform` and immediately
-          // update reachability. The retry loop owns reconnection.
-        }
-      }
-      self?.heartbeatTask = nil
-    }
-  }
-
-  private func subscribeWithRetry() {
-    guard wantsSubscription, reconnectTask == nil else { return }
-    reconnectTask = Task { @MainActor [weak self] in
-      guard let self else { return }
-
-      do {
-        let snapshot = try await self.subscribe()
-        self.retryDelay = 1
-        self.accept(snapshot)
-        self.reconnectTask = nil
-      } catch {
-        self.handleConnectionFailure(error, retry: false)
-        self.reconnectTask = nil
-        self.scheduleReconnect()
-      }
-    }
-  }
-
-  private func scheduleReconnect() {
-    guard wantsSubscription, reconnectTask == nil else { return }
-    let delay = retryDelay
-    retryDelay = min(retryDelay * 2, 30)
-    reconnectTask = Task { @MainActor [weak self] in
-      guard let self else { return }
-
-      do {
-        try await Task.sleep(for: .seconds(delay))
-      } catch {
-        self.reconnectTask = nil
-        return
-      }
-      guard self.wantsSubscription else {
-        self.reconnectTask = nil
-        return
-      }
-      self.reconnectTask = nil
-      self.subscribeWithRetry()
-    }
-  }
-
-  private func ensureConnection() throws -> NSXPCConnection {
-    if let connection { return connection }
-    guard let signingRequirement else {
-      let error = MACDancerError.daemonUnavailable(
-        "MACDancer could not determine its code-signing identity, so it will not connect to a privileged daemon."
-      )
-      publishStatus(reachability: .unavailable, health: .unhealthy, version: nil, diagnostic: error.localizedDescription)
+  func send(_ request: DaemonRequest) async throws -> DaemonSnapshot {
+    let connection = try currentConnection()
+    let payload = try MDSecurePayload(request)
+    let timeout = request.mayWriteAddress ? writeTimeout : quickTimeout
+    do {
+      let snapshot = try await call(connection, payload, timeout: timeout)
+      state = .connected
+      return snapshot
+    } catch let error as MACDancerError {
+      if case let .incompatibleProtocol(_, actual) = error { state = .incompatible(daemonVersion: actual) }
       throw error
     }
+  }
 
-    publishStatus(reachability: .connecting, health: .unknown, version: status.version, diagnostic: nil)
-    let connection = NSXPCConnection(
-      machServiceName: machServiceName,
-      options: .privileged
-    )
-    connection.remoteObjectInterface = Self.daemonInterface()
-    connection.setCodeSigningRequirement(signingRequirement)
-    connection.interruptionHandler = { [weak self] in
-      Task { @MainActor [weak self] in
-        self?.handleInterruption()
+  // MARK: - Connection
+
+  /// Keeps one subscribed connection alive while `wanted`.
+  private func supervise() async {
+    while wanted, !Task.isCancelled {
+      do {
+        let snapshot = try await send(.subscribe)
+        retryDelay = 1
+        subscribed = true
+        onSnapshot?(snapshot)
+        // Heartbeat. The daemon answers status requests even mid-write.
+        while wanted, !Task.isCancelled {
+          try await Task.sleep(for: heartbeatInterval)
+          onSnapshot?(try await send(.snapshot))
+        }
+      } catch is CancellationError {
+        return
+      } catch {
+        subscribed = false
+        guard wanted else { return }
+        let error = MACDancerError(error)
+        if case .incompatibleProtocol = error {} else { state = .unreachable(error.localizedMessage) }
+        drop()
+        try? await Task.sleep(for: .seconds(retryDelay))
+        retryDelay = min(retryDelay * 2, 30)
       }
     }
-    connection.invalidationHandler = { [weak self] in
-      Task { @MainActor [weak self] in
-        self?.handleInvalidation()
-      }
+  }
+
+  private func currentConnection() throws -> NSXPCConnection {
+    if let connection { return connection }
+    guard let requirement = CodeSigningIdentity.requirement(identifier: MACDancerConstants.daemonIdentifier) else {
+      throw MACDancerError.daemonUnavailable("This build has no code signature to verify the background service with.")
     }
-    connection.activate()
+    state = .connecting
+    let connection = NSXPCConnection(machServiceName: MACDancerConstants.daemonIdentifier, options: .privileged)
+    connection.remoteObjectInterface = XPCInterfaces.daemon()
+    connection.exportedInterface = XPCInterfaces.client()
+    connection.exportedObject = receiver
+    connection.setCodeSigningRequirement(requirement)
+    // Either handler means the daemon went away (crash, restart, unregister).
+    // The supervisor notices on its next request and reconnects.
+    connection.interruptionHandler = { [weak self] in Task { @MainActor in self?.connectionLost(connection) } }
+    connection.invalidationHandler = { [weak self] in Task { @MainActor in self?.connectionLost(connection) } }
+    connection.resume()
     self.connection = connection
     return connection
   }
 
-  private func prepareCallbackTransport(signingRequirement: String) {
-    guard callbackListener == nil else { return }
-    self.signingRequirement = signingRequirement
-    let receiver = DaemonCallbackReceiver(signingRequirement: signingRequirement)
-    receiver.onPayload = { [weak self] payload in
-      Task { @MainActor [weak self] in
-        self?.receiveCallback(payload)
-      }
-    }
-    let listener = NSXPCListener.anonymous()
-    listener.delegate = receiver
-    listener.setConnectionCodeSigningRequirement(signingRequirement)
-    listener.activate()
-    callbackReceiver = receiver
-    callbackListener = listener
+  private func connectionLost(_ lost: NSXPCConnection) {
+    guard connection === lost else { return }
+    drop()
+    guard wanted else { return }
+    state = .unreachable(L("daemon.connection_lost", "The connection to the background service was lost."))
+    // A subscribed supervisor sleeps between heartbeats; wake it to
+    // resubscribe now. A failing one is already backing off.
+    guard subscribed else { return }
+    subscribed = false
+    supervisor?.cancel()
+    supervisor = Task { [weak self] in await self?.supervise() }
   }
 
-  private func perform(
-    _ invoke: @escaping (MACDancerDaemonProtocol, @escaping (MDSecurePayload?, NSError?) -> Void) -> Void
-  ) async throws -> DaemonSnapshot {
-    let connection = try ensureConnection()
-    let snapshot: DaemonSnapshot
-    do {
-      snapshot = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<DaemonSnapshot, Error>) in
-        let gate = ReplyGate(continuation: continuation)
-        let timeout = DispatchWorkItem {
-          gate.fail(DaemonTransportError.timeout(seconds: Int(self.requestTimeout)))
-        }
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(
-          deadline: .now() + requestTimeout,
-          execute: timeout
-        )
-
-        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-          timeout.cancel()
-          gate.fail(DaemonTransportError.proxy(error.localizedDescription))
-        } as? MACDancerDaemonProtocol
-        guard let proxy else {
-          timeout.cancel()
-          gate.fail(DaemonTransportError.proxy("Unable to create a daemon XPC proxy."))
-          return
-        }
-
-        invoke(proxy) { payload, error in
-          timeout.cancel()
-          if let error {
-            // The daemon reports command validation failures through this
-            // channel too.  Those are not connection failures and must not
-            // cause a destructive command to be replayed.
-            gate.fail(error)
-            return
-          }
-          guard let payload else {
-            gate.fail(DaemonTransportError.emptyReply)
-            return
-          }
-          do {
-            let snapshot = try payload.decode(DaemonSnapshot.self)
-            guard snapshot.protocolVersion == MACDancerConstants.protocolVersion else {
-              gate.fail(MACDancerError.incompatibleProtocol(
-                expected: MACDancerConstants.protocolVersion,
-                actual: snapshot.protocolVersion
-              ))
-              return
-            }
-            gate.succeed(snapshot)
-          } catch {
-            gate.fail(error)
-          }
-        }
-      }
-    } catch let error as DaemonTransportError {
-      handleConnectionFailure(error, retry: true)
-      throw error
-    }
-
-    accept(snapshot)
-    return snapshot
-  }
-
-  private func receiveCallback(_ payload: MDSecurePayload) {
-    do {
-      let snapshot = try payload.decode(DaemonSnapshot.self)
-      guard snapshot.protocolVersion == MACDancerConstants.protocolVersion else {
-        publishStatus(
-          reachability: .reachable,
-          health: .incompatible,
-          version: snapshot.protocolVersion,
-          diagnostic: MACDancerError.incompatibleProtocol(
-            expected: MACDancerConstants.protocolVersion,
-            actual: snapshot.protocolVersion
-          ).localizedDescription
-        )
-        return
-      }
-      accept(snapshot)
-    } catch {
-      publishStatus(reachability: .reachable, health: .unhealthy, version: status.version, diagnostic: error.localizedDescription)
-    }
-  }
-
-  /// Drops only messages that are older than the most recently accepted
-  /// revision from the *same* daemon instance.  A daemon restart deliberately
-  /// has a new instance ID and is accepted even when its revision starts over.
-  private func accept(_ snapshot: DaemonSnapshot) {
-    guard snapshotTracker.accepts(snapshot) else { return }
-
-    let heartbeatAge = Date().timeIntervalSince(snapshot.heartbeat)
-    let health: DaemonHealth = heartbeatAge > 60 ? .stale : (snapshot.lastError == nil ? .healthy : .unhealthy)
-    publishStatus(
-      reachability: .reachable,
-      health: health,
-      version: snapshot.protocolVersion,
-      diagnostic: snapshot.lastError
-    )
-    onSnapshot?(snapshot)
-  }
-
-  private func handleInterruption() {
-    guard connection != nil else { return }
-    publishStatus(
-      reachability: .interrupted,
-      health: .unhealthy,
-      version: status.version,
-      diagnostic: "The background service interrupted the connection."
-    )
-    connection = nil
-    scheduleReconnect()
-  }
-
-  private func handleInvalidation() {
-    connection = nil
-    publishStatus(
-      reachability: .unavailable,
-      health: .unhealthy,
-      version: status.version,
-      diagnostic: "The background service connection was invalidated."
-    )
-    scheduleReconnect()
-  }
-
-  private func handleConnectionFailure(_ error: Error, retry: Bool) {
+  private func drop() {
     connection?.invalidate()
     connection = nil
-    publishStatus(
-      reachability: .unavailable,
-      health: .unhealthy,
-      version: status.version,
-      diagnostic: error.localizedDescription
-    )
-    if retry { scheduleReconnect() }
   }
 
-  private func publishStatus(
-    reachability: DaemonReachability,
-    health: DaemonHealth,
-    version: Int?,
-    diagnostic: String?
-  ) {
-    let next = DaemonClientStatus(
-      reachability: reachability,
-      health: health,
-      version: version,
-      diagnostic: diagnostic
-    )
-    guard next != status else { return }
-    status = next
-    onStatusChange?(next)
+  private func receive(_ payload: MDSecurePayload) {
+    do {
+      onSnapshot?(try payload.decode(DaemonSnapshot.self))
+    } catch {
+      if case let .incompatibleProtocol(_, actual) = MACDancerError(error) { state = .incompatible(daemonVersion: actual) }
+    }
   }
 
-  private static func daemonInterface() -> NSXPCInterface {
-    let interface = NSXPCInterface(with: MACDancerDaemonProtocol.self)
-    // NSXPCInterface imports NSSet<Class> as Set<AnyHashable> in Swift.
-    // Constructing through NSSet preserves the Objective-C class objects;
-    // directly putting a metatype into AnyHashable does not.
-    let payloadClasses = NSSet(object: MDSecurePayload.self) as! Set<AnyHashable>
-    let endpointClasses = NSSet(object: NSXPCListenerEndpoint.self) as! Set<AnyHashable>
-
-    func configureReply(_ selector: Selector) {
-      interface.setClasses(payloadClasses, for: selector, argumentIndex: 0, ofReply: true)
+  private nonisolated func call(
+    _ connection: NSXPCConnection,
+    _ payload: MDSecurePayload,
+    timeout: TimeInterval
+  ) async throws -> DaemonSnapshot {
+    try await withCheckedThrowingContinuation { continuation in
+      let once = ResumeOnce(continuation)
+      DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { once.resume(.failure(MACDancerError.timeout)) }
+      let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+        once.resume(.failure(MACDancerError.daemonUnavailable(error.localizedDescription)))
+      } as? MACDancerDaemonProtocol
+      guard let proxy else {
+        return once.resume(.failure(MACDancerError.daemonUnavailable("No XPC proxy.")))
+      }
+      proxy.perform(payload) { reply, error in
+        if let error { return once.resume(.failure(MACDancerError(error))) }
+        guard let reply else { return once.resume(.failure(MACDancerError.daemonUnavailable("Empty reply."))) }
+        once.resume(Result { try reply.decode(DaemonSnapshot.self) })
+      }
     }
-
-    configureReply(#selector(MACDancerDaemonProtocol.ping(_:)))
-    configureReply(#selector(MACDancerDaemonProtocol.getSnapshot(_:)))
-    interface.setClasses(endpointClasses, for: #selector(MACDancerDaemonProtocol.subscribe(_:reply:)), argumentIndex: 0, ofReply: false)
-    configureReply(#selector(MACDancerDaemonProtocol.subscribe(_:reply:)))
-
-    let mutatingSelectors: [Selector] = [
-      #selector(MACDancerDaemonProtocol.setPolicy(_:reply:)),
-      #selector(MACDancerDaemonProtocol.randomizeNow(_:reply:)),
-      #selector(MACDancerDaemonProtocol.restore(_:reply:)),
-      #selector(MACDancerDaemonProtocol.cancelPendingOperations(_:reply:)),
-      #selector(MACDancerDaemonProtocol.updateHistory(_:reply:)),
-      #selector(MACDancerDaemonProtocol.updateAutomation(_:reply:))
-    ]
-    for selector in mutatingSelectors {
-      interface.setClasses(payloadClasses, for: selector, argumentIndex: 0, ofReply: false)
-      configureReply(selector)
-    }
-    return interface
   }
 }
 
-private final class DaemonCallbackReceiver: NSObject, MACDancerClientProtocol, NSXPCListenerDelegate {
-  var onPayload: ((MDSecurePayload) -> Void)?
-  private let signingRequirement: String?
-
-  init(signingRequirement: String?) {
-    self.signingRequirement = signingRequirement
-  }
-
-  func daemonDidUpdate(_ payload: MDSecurePayload) {
-    onPayload?(payload)
-  }
-
-  func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-    // The listener itself has the same requirement.  Retaining this check on
-    // the connection protects the callback channel if it is ever refactored
-    // away from an anonymous listener.
-    guard let signingRequirement else { return false }
-    newConnection.exportedInterface = Self.clientInterface()
-    newConnection.exportedObject = self
-    newConnection.setCodeSigningRequirement(signingRequirement)
-    newConnection.activate()
-    return true
-  }
-
-  private static func clientInterface() -> NSXPCInterface {
-    let interface = NSXPCInterface(with: MACDancerClientProtocol.self)
-    interface.setClasses(
-      NSSet(object: MDSecurePayload.self) as! Set<AnyHashable>,
-      for: #selector(MACDancerClientProtocol.daemonDidUpdate(_:)),
-      argumentIndex: 0,
-      ofReply: false
-    )
-    return interface
-  }
+/// Receives pushed snapshots on the XPC connection's queue.
+private final class SnapshotReceiver: NSObject, MACDancerClientProtocol, @unchecked Sendable {
+  private let handler: (MDSecurePayload) -> Void
+  init(_ handler: @escaping (MDSecurePayload) -> Void) { self.handler = handler }
+  func daemonDidUpdate(_ snapshot: MDSecurePayload) { handler(snapshot) }
 }
 
-private final class ReplyGate<Value>: @unchecked Sendable {
+/// A reply, a transport error and the timeout race; the first one wins.
+private final class ResumeOnce: @unchecked Sendable {
   private let lock = NSLock()
-  private var continuation: CheckedContinuation<Value, Error>?
+  private var continuation: CheckedContinuation<DaemonSnapshot, Error>?
 
-  init(continuation: CheckedContinuation<Value, Error>) {
-    self.continuation = continuation
-  }
+  init(_ continuation: CheckedContinuation<DaemonSnapshot, Error>) { self.continuation = continuation }
 
-  func succeed(_ value: Value) {
-    finish(.success(value))
-  }
-
-  func fail(_ error: Error) {
-    finish(.failure(error))
-  }
-
-  private func finish(_ result: Result<Value, Error>) {
-    let continuation = lock.withLock { () -> CheckedContinuation<Value, Error>? in
+  func resume(_ result: Result<DaemonSnapshot, Error>) {
+    let continuation = lock.withLock { () -> CheckedContinuation<DaemonSnapshot, Error>? in
       defer { self.continuation = nil }
       return self.continuation
     }
-    guard let continuation else { return }
-    switch result {
-    case let .success(value): continuation.resume(returning: value)
-    case let .failure(error): continuation.resume(throwing: error)
-    }
+    continuation?.resume(with: result)
   }
 }

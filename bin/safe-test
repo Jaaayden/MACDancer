@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="${0:A:h}"
 project_root="${script_dir:h}"
 tests_dir="${project_root}/Tests"
-derived_data_path="/private/tmp/MACDancerCoreTests-DerivedData"
+derived_data_path="${DERIVED_DATA_PATH:-${TMPDIR:-/private/tmp}/MACDancerCoreTests-DerivedData}"
 
 if [[ ! -d "${tests_dir}" ]]; then
   print -u2 -- "安全门禁失败：找不到 Tests 目录。"
@@ -14,23 +14,26 @@ fi
 
 # Core tests must remain unable to express network-mutating commands. This is
 # deliberately a source-level tripwire; target isolation is the primary guard.
+# Uses /usr/bin/grep so the gate works on a stock Mac (it used to need ripgrep,
+# and silently passed when ripgrep was missing).
 forbidden_pattern='ifconfig|lladdr|disassociate|setPower|networksetup|SMAppService'
-if rg --line-number --ignore-case --glob '*.swift' --regexp "${forbidden_pattern}" "${tests_dir}"; then
+if /usr/bin/grep -rniE --include='*.swift' -- "${forbidden_pattern}" "${tests_dir}"; then
   print -u2 -- "安全门禁失败：测试代码包含可能改变网络或注册服务的操作。"
   exit 70
 fi
 
-if rg --quiet --regexp 'TEST_HOST|BUNDLE_LOADER' "${project_root}/MACDancer.xcodeproj/project.pbxproj"; then
+if /usr/bin/grep -qE 'TEST_HOST|BUNDLE_LOADER' "${project_root}/MACDancer.xcodeproj/project.pbxproj"; then
   print -u2 -- "安全门禁失败：核心测试 target 不得配置 host app 或 bundle loader。"
   exit 71
 fi
 
-if ! rg --quiet --fixed-strings 'MACDANCER_CORE_TESTS' "${project_root}/MACDancer.xcodeproj/project.pbxproj"; then
+if ! /usr/bin/grep -qF 'MACDANCER_CORE_TESTS' "${project_root}/MACDancer.xcodeproj/project.pbxproj"; then
   print -u2 -- "安全门禁失败：核心测试 target 缺少 fake-only 编译条件。"
   exit 72
 fi
 
-exec xcodebuild test \
+# Extra arguments (for example -quiet from bin/ci) go straight to xcodebuild.
+exec xcodebuild test "$@" \
   -project "${project_root}/MACDancer.xcodeproj" \
   -scheme MACDancerCoreTests \
   -destination 'platform=macOS' \

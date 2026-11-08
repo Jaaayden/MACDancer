@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "LICENSE", "docs/**"]
+  pull_request:
+    paths-ignore: ["**.md", "LICENSE", "docs/**"]
+  workflow_dispatch:
+
+# A newer push to the same branch or PR cancels the run that is now outdated.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Select Xcode 16.4
+        run: |
+          if [ -d /Applications/Xcode_16.4.app ]; then sudo xcode-select -s /Applications/Xcode_16.4.app; fi
+          xcodebuild -version
+
+      # Builds the app and daemon unsigned, then runs the core tests with the
+      # same DerivedData. No signing, no index store, Debug only.
+      - name: Build and test
+        run: ./bin/ci

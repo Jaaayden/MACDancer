@@ -23,10 +23,12 @@
 		A1000000000000000000006E /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000059 /* SystemConfiguration.framework */; };
 		A1000000000000000000006F /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1000000000000000000005A /* Security.framework */; };
 		A10000000000000000000072 /* Sources/Daemon/ConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000005F /* Sources/Daemon/ConfigurationStore.swift */; };
-		A10000000000000000000073 /* Sources/Daemon/MACSetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000074 /* Sources/Daemon/MACSetter.swift */; };
+		A10000000000000000000073 /* Sources/Daemon/MACWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000074 /* Sources/Daemon/MACWriter.swift */; };
+		A1000000000000000000007C /* Sources/Daemon/DaemonCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000007B /* Sources/Daemon/DaemonCoordinator.swift */; };
 		A10000000000000000000078 /* Sources/App/AppDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000075 /* Sources/App/AppDependencies.swift */; };
 		A10000000000000000000079 /* Sources/App/AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000076 /* Sources/App/AppModel.swift */; };
-		A1000000000000000000007A /* Sources/App/ReadOnlyRefreshController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000077 /* Sources/App/ReadOnlyRefreshController.swift */; };
+		A1000000000000000000007A /* Sources/App/Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000077 /* Sources/App/Localization.swift */; };
+		A1000000000000000000007E /* Sources/App/UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000007D /* Sources/App/UpdateModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,10 +84,12 @@
 		A1000000000000000000005B /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		A1000000000000000000005C /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
 		A1000000000000000000005F /* Sources/Daemon/ConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Daemon/ConfigurationStore.swift; sourceTree = SOURCE_ROOT; };
-		A10000000000000000000074 /* Sources/Daemon/MACSetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Daemon/MACSetter.swift; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000074 /* Sources/Daemon/MACWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Daemon/MACWriter.swift; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000007B /* Sources/Daemon/DaemonCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Daemon/DaemonCoordinator.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000075 /* Sources/App/AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/AppDependencies.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000076 /* Sources/App/AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/AppModel.swift; sourceTree = SOURCE_ROOT; };
-		A10000000000000000000077 /* Sources/App/ReadOnlyRefreshController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/ReadOnlyRefreshController.swift; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000077 /* Sources/App/Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/Localization.swift; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000007D /* Sources/App/UpdateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/UpdateModels.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -207,7 +211,8 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000005F /* Sources/Daemon/ConfigurationStore.swift */,
-				A10000000000000000000074 /* Sources/Daemon/MACSetter.swift */,
+				A10000000000000000000074 /* Sources/Daemon/MACWriter.swift */,
+				A1000000000000000000007B /* Sources/Daemon/DaemonCoordinator.swift */,
 			);
 			name = "Test-only daemon core sources";
 			sourceTree = "<group>";
@@ -217,7 +222,8 @@
 			children = (
 				A10000000000000000000075 /* Sources/App/AppDependencies.swift */,
 				A10000000000000000000076 /* Sources/App/AppModel.swift */,
-				A10000000000000000000077 /* Sources/App/ReadOnlyRefreshController.swift */,
+				A10000000000000000000077 /* Sources/App/Localization.swift */,
+				A1000000000000000000007D /* Sources/App/UpdateModels.swift */,
 			);
 			name = "Test-only app state sources";
 			sourceTree = "<group>";
@@ -370,10 +376,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000072 /* Sources/Daemon/ConfigurationStore.swift in Sources */,
-				A10000000000000000000073 /* Sources/Daemon/MACSetter.swift in Sources */,
+				A10000000000000000000073 /* Sources/Daemon/MACWriter.swift in Sources */,
+				A1000000000000000000007C /* Sources/Daemon/DaemonCoordinator.swift in Sources */,
 				A10000000000000000000078 /* Sources/App/AppDependencies.swift in Sources */,
 				A10000000000000000000079 /* Sources/App/AppModel.swift in Sources */,
-				A1000000000000000000007A /* Sources/App/ReadOnlyRefreshController.swift in Sources */,
+				A1000000000000000000007A /* Sources/App/Localization.swift in Sources */,
+				A1000000000000000000007E /* Sources/App/UpdateModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,7 +418,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/App/MACDancer.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MACDancer;
 				INFOPLIST_KEY_CFBundleName = MACDancer;
@@ -419,7 +426,6 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer;
 				PRODUCT_NAME = MACDancer;
 			};
@@ -432,7 +438,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/App/MACDancer.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MACDancer;
 				INFOPLIST_KEY_CFBundleName = MACDancer;
@@ -441,7 +446,6 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer;
 				PRODUCT_NAME = MACDancer;
 			};
@@ -452,10 +456,8 @@
 			baseConfigurationReference = A10000000000000000000056 /* Debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Sources/Daemon/MACDancerDaemon.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
 				EXECUTABLE_NAME = local.macdancer.MACDancer.daemon;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.0;
 				OTHER_CODE_SIGN_FLAGS = "--identifier local.macdancer.MACDancer.daemon";
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer.daemon;
 				PRODUCT_NAME = MACDancerDaemon;
@@ -468,10 +470,8 @@
 			baseConfigurationReference = A10000000000000000000057 /* Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Sources/Daemon/MACDancerDaemon.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
 				EXECUTABLE_NAME = local.macdancer.MACDancer.daemon;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.0;
 				OTHER_CODE_SIGN_FLAGS = "--identifier local.macdancer.MACDancer.daemon";
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer.daemon;
 				PRODUCT_NAME = MACDancerDaemon;
@@ -483,9 +483,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A10000000000000000000056 /* Debug.xcconfig */;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer.CoreTests;
 				PRODUCT_NAME = MACDancerCoreTests;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) MACDANCER_CORE_TESTS";
@@ -496,9 +494,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A10000000000000000000057 /* Release.xcconfig */;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.macdancer.MACDancer.CoreTests;
 				PRODUCT_NAME = MACDancerCoreTests;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) MACDANCER_CORE_TESTS";

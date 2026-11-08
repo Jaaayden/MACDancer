@@ -3,111 +3,68 @@ import SwiftUI
 struct DashboardView: View {
   @EnvironmentObject private var model: AppModel
 
-  let onShowInterfaces: () -> Void
-  let onRandomize: (InterfaceSnapshot) -> Void
-  let onRestore: (InterfaceSnapshot) -> Void
-
   var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 20) {
-        SectionHeader(
-          title: L("dashboard.title", "Dashboard"),
-          subtitle: L("dashboard.subtitle", "See the MAC address your network interfaces are using right now.")
+    Page(
+      title: L("dashboard.title", "Dashboard"),
+      subtitle: L("dashboard.subtitle", "See the MAC address your network interfaces are using right now.")
+    ) {
+      UpdateBanner()
+      ServiceCard()
+      WarningBanner(messages: model.warnings)
+      metrics
+
+      HStack {
+        Text(L("dashboard.interfaces.title", "Interfaces")).font(.title2.weight(.semibold))
+        Spacer()
+        Button(L("dashboard.interfaces.show_all", "Show all")) { model.selection = .interfaces }
+      }
+      if model.visibleInterfaces.isEmpty {
+        ContentUnavailableView(
+          L("dashboard.interfaces.empty.title", "No Wi-Fi or Ethernet interfaces"),
+          systemImage: "network.slash",
+          description: Text(L("dashboard.interfaces.empty.detail", "Connect an Ethernet adapter or turn on Wi-Fi, then refresh."))
         )
-
-        DaemonManagementCard()
-
-        overview
-
-        VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text(L("dashboard.interfaces.title", "Interfaces"))
-              .font(.title2.weight(.semibold))
-            Spacer()
-            Button(L("dashboard.interfaces.show_all", "Show all"), action: onShowInterfaces)
-          }
-
-          if model.interfaces.isEmpty {
-            EmptyState(
-              systemImage: "network.slash",
-              title: L("dashboard.interfaces.empty.title", "No supported network interfaces"),
-              detail: L("dashboard.interfaces.empty.detail", "Connect an Ethernet adapter or enable Wi-Fi, then refresh this view."),
-              actionTitle: L("common.refresh", "Refresh"),
-              action: { model.refresh() }
-            )
-            .frame(minHeight: 200)
-          } else {
-            ForEach(model.interfaces.prefix(3)) { interface in
-              InterfaceStatusCard(
-                interface: interface,
-                compact: true,
-                onCopy: {
-                  if let address = interface.currentMAC {
-                    copyToPasteboard(address.stringValue)
-                  }
-                },
-                onRandomize: { onRandomize(interface) },
-                onRestore: { onRestore(interface) }
-              )
-            }
-          }
+      } else {
+        ForEach(model.visibleInterfaces) { interface in
+          InterfaceCard(interface: interface, compact: true)
         }
       }
-      .padding(24)
-      .frame(maxWidth: 1_060, alignment: .leading)
     }
-    .navigationTitle(L("dashboard.title", "Dashboard"))
   }
 
-  private var overview: some View {
-    LazyVGrid(
-      columns: [GridItem(.flexible(minimum: 180)), GridItem(.flexible(minimum: 180)), GridItem(.flexible(minimum: 180))],
-      spacing: 12
-    ) {
-      OverviewMetric(
-        title: L("dashboard.metric.interfaces", "Supported interfaces"),
-        value: "\(model.interfaces.count)",
+  private var metrics: some View {
+    let interfaces = model.visibleInterfaces
+    return HStack(spacing: 12) {
+      Metric(
+        title: L("dashboard.metric.interfaces", "Interfaces"),
+        value: interfaces.count,
         detail: L("dashboard.metric.interfaces.detail", "Wi-Fi and Ethernet adapters")
       )
-
-      OverviewMetric(
-        title: L("dashboard.metric.active", "Active now"),
-        value: "\(model.interfaces.filter(\.isActive).count)",
-        detail: L("dashboard.metric.active.detail", "Interfaces currently in use")
+      Metric(
+        title: L("dashboard.metric.active", "In use"),
+        value: interfaces.filter(\.isInUse).count,
+        detail: L("dashboard.metric.active.detail", "Connected or carrying traffic")
       )
-
-      OverviewMetric(
+      Metric(
         title: L("dashboard.metric.hardware", "Using hardware MAC"),
-        value: "\(hardwareMACCount)",
-        detail: L("dashboard.metric.hardware.detail", "Review the interface before changing it")
+        value: interfaces.filter(\.usesHardwareMAC).count,
+        detail: L("dashboard.metric.hardware.detail", "Visible to every network you join")
       )
     }
-  }
-
-  private var hardwareMACCount: Int {
-    model.interfaces.filter { interface in
-      guard let current = interface.currentMAC, let hardware = interface.hardwareMAC else { return false }
-      return current == hardware
-    }.count
   }
 }
 
-private struct OverviewMetric: View {
+private struct Metric: View {
   let title: String
-  let value: String
+  let value: Int
   let detail: String
 
   var body: some View {
     GroupBox {
-      VStack(alignment: .leading, spacing: 7) {
-        Text(title)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        Text(value)
-          .font(.system(size: 30, weight: .semibold, design: .rounded))
-        Text(detail)
-          .font(.caption)
-          .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 6) {
+        Text(title).font(.subheadline).foregroundStyle(.secondary)
+        Text("\(value)").font(.system(size: 30, weight: .semibold, design: .rounded))
+        Text(detail).font(.caption).foregroundStyle(.secondary)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(4)
@@ -115,222 +72,128 @@ private struct OverviewMetric: View {
   }
 }
 
-struct DaemonManagementCard: View {
+/// Install, approve, repair or remove the privileged background service.
+struct ServiceCard: View {
   @EnvironmentObject private var model: AppModel
   @State private var confirmsUninstall = false
 
-  private var presentation: DaemonPresentation {
-    DaemonPresentation(model.daemonState)
-  }
-
   var body: some View {
     GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top, spacing: 12) {
-          Image(systemName: presentation.systemImage)
+          Image(systemName: symbol)
             .font(.title2)
-            .foregroundStyle(presentation.tint)
+            .foregroundStyle(tint)
             .frame(width: 28)
-
           VStack(alignment: .leading, spacing: 4) {
-            Text(L("daemon.card.title", "Background service"))
-              .font(.headline)
-            Text(presentation.message)
+            Text(L("daemon.card.title", "Background service")).font(.headline)
+            Text(message)
               .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
           }
           Spacer()
-          StatusPill(title: presentation.title, systemImage: presentation.systemImage, tint: presentation.tint)
+          StatusPill(title: title, systemImage: symbol, tint: tint)
+        }
+
+        if model.legacyServiceDetected {
+          Label(MACDancerError.legacyServiceConflict.localizedMessage, systemImage: "exclamationmark.octagon.fill")
+            .font(.callout)
+            .foregroundStyle(.red)
         }
 
         HStack(spacing: 10) {
-          switch presentation.kind {
-          case .notInstalled:
-            Button(L("daemon.action.install", "Install background service")) {
-              model.installDaemon()
-            }
-            .buttonStyle(.borderedProminent)
-
-          case .awaitingApproval:
-            Button(L("daemon.action.open_settings", "Open System Settings")) {
-              openBackgroundItemsSettings()
-            }
-            .buttonStyle(.borderedProminent)
-
-          case .unavailable, .unknown:
-            Button(L("daemon.action.repair", "Repair connection")) {
-              model.repairDaemon()
-            }
-            .buttonStyle(.borderedProminent)
-
-          case .ready:
-            Button(L("daemon.action.repair", "Repair connection")) {
-              model.repairDaemon()
-            }
+          primaryButton
+          if model.registration == .enabled || model.registration == .requiresApproval {
+            Button(L("daemon.action.uninstall", "Uninstall…"), role: .destructive) { confirmsUninstall = true }
           }
-
-          Menu {
-            Button(L("daemon.action.install", "Install background service")) {
-              model.installDaemon()
-            }
-            Button(L("daemon.action.repair", "Repair connection")) {
-              model.repairDaemon()
-            }
-            if presentation.kind == .awaitingApproval {
-              Button(L("daemon.action.open_settings", "Open System Settings")) {
-                openBackgroundItemsSettings()
-              }
-            }
-            Divider()
-            Button(L("daemon.action.uninstall", "Uninstall background service"), role: .destructive) {
-              confirmsUninstall = true
-            }
-          } label: {
-            Label(L("common.more", "More"), systemImage: "ellipsis.circle")
-          }
-
+          if model.isChangingService { ProgressView().controlSize(.small) }
           Spacer()
         }
-
-        Divider()
-
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
-          serviceFact(
-            L("daemon.fact.registration", "Registration"),
-            daemonRegistrationText(model.daemonRegistration)
-          )
-          serviceFact(
-            L("daemon.fact.approval", "User approval"),
-            model.daemonRegistration == .requiresApproval
-              ? L("daemon.fact.required", "Required")
-              : L("daemon.fact.not_required", "Not pending")
-          )
-          serviceFact(
-            L("daemon.fact.xpc", "XPC reachability"),
-            daemonReachabilityText(model.daemonReachability)
-          )
-          serviceFact(
-            L("daemon.fact.health", "Daemon health"),
-            daemonHealthText(model.daemonHealth)
-          )
-          serviceFact(
-            L("daemon.fact.protocol", "Protocol"),
-            "GUI \(MACDancerConstants.protocolVersion) · daemon \(model.daemonVersion.map(String.init) ?? "—")"
-          )
-        }
-
-        if model.legacyLinkLiarDetected {
-          Label(
-            L(
-              "daemon.legacy.warning",
-              "LinkLiar’s legacy daemon was detected. MACDancer remains read-only to prevent two services from competing."
-            ),
-            systemImage: "exclamationmark.triangle.fill"
-          )
-          .font(.caption)
-          .foregroundStyle(.red)
-        }
+        .disabled(model.isChangingService)
       }
       .padding(4)
     }
-    .alert(
-      L("daemon.uninstall.title", "Uninstall the background service?"),
-      isPresented: $confirmsUninstall
-    ) {
-      Button(L("daemon.action.uninstall", "Uninstall background service"), role: .destructive) {
-        model.uninstallDaemon()
-      }
+    .alert(L("daemon.uninstall.title", "Uninstall the background service?"), isPresented: $confirmsUninstall) {
+      Button(L("daemon.action.uninstall_confirm", "Uninstall"), role: .destructive) { model.uninstallService() }
       Button(L("common.cancel", "Cancel"), role: .cancel) {}
-        .keyboardShortcut(.cancelAction)
     } message: {
       Text(L(
         "daemon.uninstall.message",
-        "Automatic MAC protection stops immediately. The current MAC, configuration, and per-interface history are preserved. No address is restored implicitly."
+        "Automatic rotation stops. Current MAC addresses, policies and history are kept, and no address is restored."
       ))
     }
   }
 
-  private func serviceFact(_ label: String, _ value: String) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(label).font(.caption).foregroundStyle(.secondary)
-      Text(value).font(.system(.subheadline, design: .monospaced))
-    }
-  }
-}
-
-private struct DaemonPresentation {
-  enum Kind {
-    case ready
-    case notInstalled
-    case awaitingApproval
-    case unavailable
-    case unknown
-  }
-
-  let kind: Kind
-
-  init(_ state: DaemonLifecycleState) {
-    switch state {
-    case .ready: kind = .ready
-    case .notInstalled: kind = .notInstalled
-    case .awaitingApproval: kind = .awaitingApproval
-    case .unavailable: kind = .unavailable
-    case .checking: kind = .unknown
-    }
-  }
-
-  var title: String {
-    switch kind {
-    case .ready:
-      L("daemon.status.ready", "Ready")
+  @ViewBuilder
+  private var primaryButton: some View {
+    switch model.status {
+    case .checking, .connecting:
+      EmptyView()
     case .notInstalled:
-      L("daemon.status.not_installed", "Not installed")
+      Button(L("daemon.action.install", "Install background service")) { model.installService() }
+        .buttonStyle(.borderedProminent)
     case .awaitingApproval:
-      L("daemon.status.awaiting_approval", "Approval required")
-    case .unavailable:
-      L("daemon.status.unavailable", "Unavailable")
-    case .unknown:
-      L("daemon.status.checking", "Checking")
+      Button(L("daemon.action.open_settings", "Open System Settings")) { model.openApprovalSettings() }
+        .buttonStyle(.borderedProminent)
+    case .unreachable, .incompatible:
+      Button(L("daemon.action.repair", "Repair connection")) { model.repairService() }
+        .buttonStyle(.borderedProminent)
+    case .ready:
+      Button(L("daemon.action.repair", "Repair connection")) { model.repairService() }
+        .help(L("daemon.action.repair_help", "Reload the background service, e.g. after building a new version."))
     }
   }
 
-  var message: String {
-    switch kind {
-    case .ready:
-      L("daemon.message.ready", "The service can apply configured MAC changes and report their verified result.")
+  private var title: String {
+    switch model.status {
+    case .checking: L("daemon.status.checking", "Checking")
+    case .notInstalled: L("daemon.status.not_installed", "Not installed")
+    case .awaitingApproval: L("daemon.status.awaiting_approval", "Approval required")
+    case .connecting: L("daemon.status.connecting", "Connecting")
+    case .ready: L("daemon.status.ready", "Ready")
+    case .unreachable: L("daemon.status.unavailable", "Unavailable")
+    case .incompatible: L("daemon.status.incompatible", "Version mismatch")
+    }
+  }
+
+  private var message: String {
+    switch model.status {
+    case .checking:
+      L("daemon.message.checking", "Checking the background service…")
     case .notInstalled:
-      L("daemon.message.not_installed", "Install the privileged background service before changing a MAC address.")
+      L("daemon.message.not_installed", "MACDancer needs its background service to change MAC addresses. Reading addresses works without it.")
     case .awaitingApproval:
-      L("daemon.message.awaiting_approval", "macOS must approve this background service before it can run.")
-    case .unavailable:
-      L("daemon.message.unavailable", "The service is registered but not responding. Repair the connection before requesting a change.")
-    case .unknown:
-      L("daemon.message.checking", "MACDancer is checking the service connection.")
+      L("daemon.message.awaiting_approval", "Allow MACDancer in System Settings › General › Login Items & Extensions, then come back.")
+    case .connecting:
+      L("daemon.message.connecting", "Connecting to the background service…")
+    case .ready:
+      L("daemon.message.ready", "Changes are applied by the background service and verified by reading the address back.")
+    case let .unreachable(reason):
+      L("daemon.message.unavailable", "The service is installed but not answering (%@). Repair connection reloads it.", reason)
+    case let .incompatible(version):
+      L(
+        "daemon.message.incompatible",
+        "The running service is from another build (protocol %1$d, this app uses %2$d). Repair connection loads the one inside this app.",
+        version, MACDancerConstants.protocolVersion
+      )
     }
   }
 
-  var systemImage: String {
-    switch kind {
-    case .ready:
-      "checkmark.shield.fill"
-    case .notInstalled:
-      "arrow.down.app"
-    case .awaitingApproval:
-      "lock.shield"
-    case .unavailable:
-      "exclamationmark.triangle.fill"
-    case .unknown:
-      "questionmark.circle"
+  private var symbol: String {
+    switch model.status {
+    case .ready: "checkmark.shield.fill"
+    case .notInstalled: "arrow.down.app"
+    case .awaitingApproval: "lock.shield"
+    case .checking, .connecting: "hourglass"
+    case .unreachable, .incompatible: "exclamationmark.triangle.fill"
     }
   }
 
-  var tint: Color {
-    switch kind {
-    case .ready:
-      .green
-    case .notInstalled, .awaitingApproval, .unknown:
-      .orange
-    case .unavailable:
-      .red
+  private var tint: Color {
+    switch model.status {
+    case .ready: .green
+    case .notInstalled, .awaitingApproval, .checking, .connecting: .orange
+    case .unreachable, .incompatible: .red
     }
   }
 }

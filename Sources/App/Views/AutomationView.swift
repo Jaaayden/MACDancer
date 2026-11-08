@@ -2,181 +2,93 @@ import SwiftUI
 
 struct AutomationView: View {
   @EnvironmentObject private var model: AppModel
-  let onShowInterfaces: () -> Void
 
   var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 20) {
-        SectionHeader(
-          title: L("automation.title", "Automation"),
-          subtitle: L("automation.subtitle", "MACDancer keeps configured policies in sync without silently changing an active connection.")
-        )
-
-        GroupBox {
-          VStack(alignment: .leading, spacing: 14) {
-            HStack {
-              VStack(alignment: .leading, spacing: 3) {
-                Text(L("automation.configured.title", "Configured random-MAC interfaces"))
-                  .font(.headline)
-                Text(L("automation.configured.detail", "These policies are applied by the background service only when their safety conditions allow it."))
-                  .font(.subheadline)
-                  .foregroundStyle(.secondary)
-              }
-              Spacer()
-              Text("\(randomPolicyCount)")
-                .font(.system(size: 32, weight: .semibold, design: .rounded))
-            }
-
-            Button(L("automation.configure", "Review interface policies"), action: onShowInterfaces)
-          }
-          .padding(4)
-        }
-
-        GroupBox {
-          VStack(alignment: .leading, spacing: 0) {
-            automationToggle(
-              title: L("automation.setting.wake.title", "Queue a rotation after wake"),
-              detail: L(
-                "automation.setting.wake.detail",
-                "Reconcile after wake and rotate only after the interface is no longer active, associated Wi-Fi, or the default route."
-              ),
-              keyPath: \.rotateAfterWake
-            )
-
-            Divider().padding(.vertical, 10)
-
-            automationToggle(
-              title: L("automation.setting.inactive.title", "Rotate when an interface becomes inactive"),
-              detail: L(
-                "automation.setting.inactive.detail",
-                "Queue one coalesced rotation when a configured interface transitions from active to safely inactive."
-              ),
-              keyPath: \.rotateWhenInterfaceBecomesInactive
-            )
-
-            Divider().padding(.vertical, 10)
-
-            automationToggle(
-              title: L("automation.setting.sleep.title", "Prepare a rotation before sleep"),
-              detail: L(
-                "automation.setting.sleep.detail",
-                "Record pending work and let macOS sleep immediately. No MAC is written from the sleep callback."
-              ),
-              keyPath: \.prepareRotationBeforeSleep
-            )
-          }
-          .padding(4)
-        }
-        .disabled(model.daemonState != .ready || model.isUpdatingAutomation)
-
-        VStack(alignment: .leading, spacing: 10) {
-          Text(L("automation.events.title", "Safety-first automatic events"))
-            .font(.title2.weight(.semibold))
-
-          AutomationEventRow(
-            icon: "arrow.triangle.2.circlepath",
-            title: L("automation.event.network.title", "Network conditions change"),
-            detail: L("automation.event.network.detail", "The service rechecks configured policies after macOS reports an interface change."),
-            tint: .blue
-          )
-
-          AutomationEventRow(
-            icon: "bed.double.fill",
-            title: L("automation.event.sleep.title", "Before sleep"),
-            detail: L("automation.event.sleep.detail", "MACDancer only records pending work and immediately allows sleep; it never writes a MAC from the power callback."),
-            tint: .purple
-          )
-
-          AutomationEventRow(
-            icon: "wifi.slash",
-            title: L("automation.event.active_wifi.title", "Active Wi-Fi is protected"),
-            detail: L("automation.event.active_wifi.detail", "MACDancer never changes an active Wi-Fi connection automatically. Manual changes require your confirmation."),
-            tint: .orange
-          )
-
-          AutomationEventRow(
-            icon: "arrow.triangle.branch",
-            title: L("automation.event.default_route.title", "Default route is protected"),
-            detail: L("automation.event.default_route.detail", "Automatic changes are deferred while an interface carries your default route."),
-            tint: .orange
-          )
-        }
-
-        GroupBox {
-          HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "info.circle")
+    Page(
+      title: L("automation.title", "Automation"),
+      subtitle: L("automation.subtitle", "Rotate addresses of interfaces with the random policy, without ever interrupting a connection.")
+    ) {
+      GroupBox {
+        HStack(alignment: .top) {
+          VStack(alignment: .leading, spacing: 4) {
+            Text(L("automation.configured.title", "Interfaces with the random policy")).font(.headline)
+            Text(randomInterfaces.isEmpty
+              ? L("automation.configured.none", "None yet. “Randomize now” or the Policy menu on an interface turns it on.")
+              : randomInterfaces.map(\.displayName).joined(separator: ", "))
+              .font(.subheadline)
               .foregroundStyle(.secondary)
-            Text(L(
-              "automation.scope_notice",
-              "This page explains the daemon’s existing behavior. It does not add a timer, scan networks, or make a network change by itself."
-            ))
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
           }
-          .padding(4)
+          Spacer()
+          Button(L("automation.configure", "Review interfaces")) { model.selection = .interfaces }
         }
+        .padding(4)
       }
-      .padding(24)
-      .frame(maxWidth: 1_060, alignment: .leading)
+
+      GroupBox {
+        VStack(alignment: .leading, spacing: 12) {
+          toggle(
+            \.rotateAfterWake,
+            title: L("automation.setting.wake.title", "Rotate after wake"),
+            detail: L("automation.setting.wake.detail", "After the Mac wakes, rotate each random-policy interface as soon as it is not in use.")
+          )
+          Divider()
+          toggle(
+            \.rotateWhenInterfaceBecomesInactive,
+            title: L("automation.setting.inactive.title", "Rotate when an interface stops being used"),
+            detail: L("automation.setting.inactive.detail", "When an interface disconnects (for example Wi-Fi leaves a network), give it a new address before its next connection.")
+          )
+          Divider()
+          toggle(
+            \.prepareRotationBeforeSleep,
+            title: L("automation.setting.sleep.title", "Prepare a rotation before sleep"),
+            detail: L("automation.setting.sleep.detail", "Queue a rotation as the Mac goes to sleep. Nothing is written until it wakes and the interface is safe.")
+          )
+        }
+        .padding(4)
+      }
+      .disabled(!model.isReady || model.isUpdatingAutomation)
+
+      GroupBox {
+        VStack(alignment: .leading, spacing: 12) {
+          SettingRow(
+            symbol: "wifi.slash", tint: .orange,
+            title: L("automation.rule.wifi.title", "Connected Wi-Fi is never touched automatically"),
+            detail: L("automation.rule.wifi.detail", "Automatic rotation never disconnects Wi-Fi. It waits until Wi-Fi is off a network.")
+          )
+          SettingRow(
+            symbol: "arrow.triangle.branch", tint: .orange,
+            title: L("automation.rule.route.title", "Interfaces in use are protected"),
+            detail: L("automation.rule.route.detail", "An interface with an IP address or the default route keeps its address until it is idle.")
+          )
+          SettingRow(
+            symbol: "bed.double.fill", tint: .purple,
+            title: L("automation.rule.sleep.title", "Sleep is never delayed"),
+            detail: L("automation.rule.sleep.detail", "Before sleep MACDancer only records the pending rotation and lets the Mac sleep at once.")
+          )
+        }
+        .padding(4)
+      }
     }
-    .navigationTitle(L("automation.title", "Automation"))
   }
 
-  private var randomPolicyCount: Int {
-    model.interfaces.reduce(into: 0) { count, interface in
-      if case .random = interface.policy {
-        count += 1
-      }
-    }
+  private var randomInterfaces: [InterfaceSnapshot] {
+    model.interfaces.filter { $0.policy == .random }
   }
 
-  private func automationToggle(
-    title: String,
-    detail: String,
-    keyPath: WritableKeyPath<AutomationSettings, Bool>
-  ) -> some View {
+  private func toggle(_ keyPath: WritableKeyPath<AutomationSettings, Bool>, title: String, detail: String) -> some View {
     Toggle(isOn: Binding(
-      get: { model.automationSettings[keyPath: keyPath] },
-      set: { newValue in
-        var updated = model.automationSettings
-        updated[keyPath: keyPath] = newValue
-        model.updateAutomation(updated)
+      get: { model.automation[keyPath: keyPath] },
+      set: { value in
+        var settings = model.automation
+        settings[keyPath: keyPath] = value
+        model.setAutomation(settings)
       }
     )) {
-      VStack(alignment: .leading, spacing: 4) {
+      VStack(alignment: .leading, spacing: 3) {
         Text(title).font(.headline)
-        Text(detail)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
+        Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
       }
     }
     .toggleStyle(.switch)
-  }
-}
-
-private struct AutomationEventRow: View {
-  let icon: String
-  let title: String
-  let detail: String
-  let tint: Color
-
-  var body: some View {
-    GroupBox {
-      HStack(alignment: .top, spacing: 14) {
-        Image(systemName: icon)
-          .font(.title3)
-          .foregroundStyle(tint)
-          .frame(width: 28)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(title)
-            .font(.headline)
-          Text(detail)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-        Spacer(minLength: 0)
-      }
-      .padding(4)
-    }
   }
 }
