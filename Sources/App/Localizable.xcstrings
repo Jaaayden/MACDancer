@@ -1,22 +1,185 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
-
-    },
-    "%@ · %@" : {
+    "alert.automation_failed" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
+            "state" : "translated",
+            "value" : "Could not update automation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新自动化设置"
+          }
+        }
+      }
+    },
+    "alert.cancel_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not cancel the pending rotation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法取消待处理的轮换"
+          }
+        }
+      }
+    },
+    "alert.history_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not change the history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法修改历史记录"
+          }
+        }
+      }
+    },
+    "alert.install_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not install the background service"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法安装后台服务"
+          }
+        }
+      }
+    },
+    "alert.policy_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not change the policy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法修改策略"
+          }
+        }
+      }
+    },
+    "alert.randomize_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not randomize the MAC address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法随机化 MAC 地址"
+          }
+        }
+      }
+    },
+    "alert.read_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read network interfaces"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取网络接口"
+          }
+        }
+      }
+    },
+    "alert.repair_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not repair the background service"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法修复后台服务"
+          }
+        }
+      }
+    },
+    "alert.restore_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not restore the MAC address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法恢复 MAC 地址"
+          }
+        }
+      }
+    },
+    "alert.uninstall_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not uninstall the background service"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法卸载后台服务"
           }
         }
       }
     },
     "app.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26,184 +189,218 @@
       }
     },
     "automation.configure" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "查看接口策略"
+            "value" : "查看接口"
           }
         }
       }
     },
-    "automation.configured.detail" : {
-      "extractionState" : "stale",
+    "automation.configured.none" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None yet. “Randomize now” or the Policy menu on an interface turns it on."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "后台服务仅在安全条件满足时应用这些策略。"
+            "value" : "还没有。在接口上点“立即随机化”或从“策略”菜单开启。"
           }
         }
       }
     },
     "automation.configured.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces with the random policy"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已配置随机 MAC 的接口"
+            "value" : "使用随机策略的接口"
           }
         }
       }
     },
-    "automation.event.active_wifi.detail" : {
-      "extractionState" : "stale",
+    "automation.rule.route.detail" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An interface with an IP address or the default route keeps its address until it is idle."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 绝不会自动修改正在使用的 Wi-Fi；手动修改也需要你的确认。"
+            "value" : "有 IP 地址或承载默认路由的接口，在空闲之前保持原地址。"
           }
         }
       }
     },
-    "automation.event.active_wifi.title" : {
-      "extractionState" : "stale",
+    "automation.rule.route.title" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces in use are protected"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保护活动 Wi-Fi"
+            "value" : "正在使用的接口受到保护"
           }
         }
       }
     },
-    "automation.event.default_route.detail" : {
-      "extractionState" : "stale",
+    "automation.rule.sleep.detail" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before sleep MACDancer only records the pending rotation and lets the Mac sleep at once."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接口承载默认路由时，所有自动修改都会延后。"
+            "value" : "睡眠前 MACDancer 只记录待处理的轮换，让 Mac 立即睡眠。"
           }
         }
       }
     },
-    "automation.event.default_route.title" : {
-      "extractionState" : "stale",
+    "automation.rule.sleep.title" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is never delayed"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保护默认路由"
+            "value" : "不会拖慢睡眠"
           }
         }
       }
     },
-    "automation.event.network.detail" : {
-      "extractionState" : "stale",
+    "automation.rule.wifi.detail" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic rotation never disconnects Wi-Fi. It waits until Wi-Fi is off a network."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "macOS 报告接口变化后，服务会重新读取状态并评估已配置策略。"
+            "value" : "自动轮换永远不会断开 Wi-Fi，而是等到 Wi-Fi 不在任何网络上时再进行。"
           }
         }
       }
     },
-    "automation.event.network.title" : {
-      "extractionState" : "stale",
+    "automation.rule.wifi.title" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "网络条件变化"
+            "value" : "Connected Wi-Fi is never touched automatically"
           }
-        }
-      }
-    },
-    "automation.event.sleep.detail" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 只记录待处理任务并立即允许睡眠，绝不会在电源回调中写入 MAC。"
-          }
-        }
-      }
-    },
-    "automation.event.sleep.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "睡眠前"
-          }
-        }
-      }
-    },
-    "automation.events.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安全优先的自动事件"
-          }
-        }
-      }
-    },
-    "automation.scope_notice" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此页面只配置后台行为；页面本身不会创建强制定时轮换、扫描网络或修改网卡。"
+            "value" : "自动化从不碰已连接的 Wi-Fi"
           }
         }
       }
     },
     "automation.setting.inactive.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When an interface disconnects (for example Wi-Fi leaves a network), give it a new address before its next connection."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已配置接口从活动状态转为安全的非活动状态时，只合并排队一次轮换。"
+            "value" : "接口断开时（例如 Wi-Fi 离开某个网络），在下一次连接前换一个新地址。"
           }
         }
       }
     },
     "automation.setting.inactive.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotate when an interface stops being used"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接口变为非活动时轮换"
+            "value" : "接口停止使用时轮换"
           }
         }
       }
     },
     "automation.setting.sleep.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queue a rotation as the Mac goes to sleep. Nothing is written until it wakes and the interface is safe."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只记录待处理任务并让 macOS 立即睡眠，不在睡眠回调中写入 MAC。"
+            "value" : "Mac 进入睡眠时把轮换排进队列；唤醒且接口安全之前不会写入任何地址。"
           }
         }
       }
     },
     "automation.setting.sleep.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prepare a rotation before sleep"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -213,41 +410,65 @@
       }
     },
     "automation.setting.wake.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the Mac wakes, rotate each random-policy interface as soon as it is not in use."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "唤醒后重新校准；只有接口不再活动、不再关联 Wi-Fi 且不承载默认路由时才轮换。"
+            "value" : "Mac 唤醒后，每个随机策略接口一旦不再使用就会轮换。"
           }
         }
       }
     },
     "automation.setting.wake.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotate after wake"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "唤醒后排队轮换"
+            "value" : "唤醒后轮换"
           }
         }
       }
     },
     "automation.subtitle" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotate addresses of interfaces with the random policy, without ever interrupting a connection."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 在不静默破坏活动连接的前提下同步策略。"
+            "value" : "为使用随机策略的接口轮换地址，绝不打断正在使用的连接。"
           }
         }
       }
     },
     "automation.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automation"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -256,20 +477,83 @@
         }
       }
     },
-    "command.copy_mac" : {
-      "extractionState" : "stale",
+    "blocked.busy" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A change is in progress."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "复制当前 MAC 地址"
+            "value" : "正在修改中。"
+          }
+        }
+      }
+    },
+    "blocked.service" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service is not ready."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台服务尚未就绪。"
+          }
+        }
+      }
+    },
+    "blocked.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only Wi-Fi and Ethernet are supported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只支持 Wi-Fi 和以太网。"
+          }
+        }
+      }
+    },
+    "command.check_updates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新…"
           }
         }
       }
     },
     "command.navigate" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navigate"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -279,19 +563,31 @@
       }
     },
     "command.open_settings" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设置"
+            "value" : "设置…"
           }
         }
       }
     },
     "command.refresh" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh MAC addresses"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -301,8 +597,14 @@
       }
     },
     "common.cancel" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -311,20 +613,15 @@
         }
       }
     },
-    "common.more" : {
-      "extractionState" : "stale",
+    "common.ok" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "更多"
+            "value" : "OK"
           }
-        }
-      }
-    },
-    "common.ok" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -333,20 +630,15 @@
         }
       }
     },
-    "common.refresh" : {
-      "extractionState" : "stale",
+    "daemon.action.install" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "刷新"
+            "value" : "Install background service"
           }
-        }
-      }
-    },
-    "daemon.action.install" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -356,8 +648,14 @@
       }
     },
     "daemon.action.open_settings" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open System Settings"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -367,8 +665,14 @@
       }
     },
     "daemon.action.repair" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repair connection"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -377,20 +681,66 @@
         }
       }
     },
-    "daemon.action.uninstall" : {
-      "extractionState" : "stale",
+    "daemon.action.repair_help" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reload the background service, e.g. after building a new version."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "卸载后台服务"
+            "value" : "重新加载后台服务，例如构建了新版本之后。"
+          }
+        }
+      }
+    },
+    "daemon.action.uninstall" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uninstall…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卸载…"
+          }
+        }
+      }
+    },
+    "daemon.action.uninstall_confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uninstall"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卸载"
           }
         }
       }
     },
     "daemon.card.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background service"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -399,317 +749,151 @@
         }
       }
     },
-    "daemon.fact.approval" : {
-      "extractionState" : "stale",
+    "daemon.connection_lost" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户批准"
+            "value" : "The connection to the background service was lost."
           }
-        }
-      }
-    },
-    "daemon.fact.health" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "daemon 健康状态"
-          }
-        }
-      }
-    },
-    "daemon.fact.not_required" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无需等待"
-          }
-        }
-      }
-    },
-    "daemon.fact.protocol" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "协议"
-          }
-        }
-      }
-    },
-    "daemon.fact.registration" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "注册状态"
-          }
-        }
-      }
-    },
-    "daemon.fact.required" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要批准"
-          }
-        }
-      }
-    },
-    "daemon.fact.xpc" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XPC 可达性"
-          }
-        }
-      }
-    },
-    "daemon.health.healthy" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "健康"
-          }
-        }
-      }
-    },
-    "daemon.health.incompatible" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "协议不匹配"
-          }
-        }
-      }
-    },
-    "daemon.health.stale" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状态过期"
-          }
-        }
-      }
-    },
-    "daemon.health.unhealthy" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要处理"
-          }
-        }
-      }
-    },
-    "daemon.health.unknown" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知"
-          }
-        }
-      }
-    },
-    "daemon.legacy.warning" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检测到 LinkLiar 旧版 daemon。为防止两个服务竞争，MACDancer 将保持只读。"
+            "value" : "与后台服务的连接已断开。"
           }
         }
       }
     },
     "daemon.message.awaiting_approval" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow MACDancer in System Settings › General › Login Items & Extensions, then come back."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此后台服务运行前需要得到 macOS 批准。"
+            "value" : "请在“系统设置 › 通用 › 登录项与扩展”中允许 MACDancer，然后回到这里。"
           }
         }
       }
     },
     "daemon.message.checking" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking the background service…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 正在检查服务连接。"
+            "value" : "正在检查后台服务…"
+          }
+        }
+      }
+    },
+    "daemon.message.connecting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to the background service…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在连接后台服务…"
+          }
+        }
+      }
+    },
+    "daemon.message.incompatible" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The running service is from another build (protocol %1$d, this app uses %2$d). Repair connection loads the one inside this app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在运行的服务来自其他构建（协议 %1$d，本 App 使用 %2$d）。“修复连接”会加载本 App 内置的服务。"
           }
         }
       }
     },
     "daemon.message.not_installed" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer needs its background service to change MAC addresses. Reading addresses works without it."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "修改 MAC 地址前请安装特权后台服务。"
+            "value" : "修改 MAC 地址需要后台服务；不安装也可以读取地址。"
           }
         }
       }
     },
     "daemon.message.ready" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes are applied by the background service and verified by reading the address back."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "服务可以执行已配置的 MAC 修改并报告读回验证结果。"
+            "value" : "修改由后台服务执行，并通过读回地址来验证。"
           }
         }
       }
     },
     "daemon.message.unavailable" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "服务已注册但没有响应；请求修改前请先修复连接。"
+            "value" : "The service is installed but not answering (%@). Repair connection reloads it."
           }
-        }
-      }
-    },
-    "daemon.reachability.connecting" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在连接"
-          }
-        }
-      }
-    },
-    "daemon.reachability.interrupted" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接已中断"
-          }
-        }
-      }
-    },
-    "daemon.reachability.reachable" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可达"
-          }
-        }
-      }
-    },
-    "daemon.reachability.unavailable" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不可达"
-          }
-        }
-      }
-    },
-    "daemon.reachability.unknown" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知"
-          }
-        }
-      }
-    },
-    "daemon.registration.enabled" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已注册"
-          }
-        }
-      }
-    },
-    "daemon.registration.not_found" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未找到 helper"
-          }
-        }
-      }
-    },
-    "daemon.registration.not_installed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未安装"
-          }
-        }
-      }
-    },
-    "daemon.registration.requires_approval" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要批准"
-          }
-        }
-      }
-    },
-    "daemon.registration.unknown" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知"
+            "value" : "服务已安装但没有响应（%@）。“修复连接”会重新加载它。"
           }
         }
       }
     },
     "daemon.status.awaiting_approval" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approval required"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -719,8 +903,14 @@
       }
     },
     "daemon.status.checking" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -729,9 +919,49 @@
         }
       }
     },
-    "daemon.status.not_installed" : {
-      "extractionState" : "stale",
+    "daemon.status.connecting" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接中"
+          }
+        }
+      }
+    },
+    "daemon.status.incompatible" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version mismatch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本不一致"
+          }
+        }
+      }
+    },
+    "daemon.status.not_installed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not installed"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -741,8 +971,14 @@
       }
     },
     "daemon.status.ready" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -752,8 +988,14 @@
       }
     },
     "daemon.status.unavailable" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -763,19 +1005,31 @@
       }
     },
     "daemon.uninstall.message" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic rotation stops. Current MAC addresses, policies and history are kept, and no address is restored."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "自动 MAC 保护会立即停止。当前 MAC、配置和每接口历史都会保留，不会隐式恢复任何地址。"
+            "value" : "自动轮换会停止。当前 MAC 地址、策略和历史记录都会保留，也不会恢复任何地址。"
           }
         }
       }
     },
     "daemon.uninstall.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uninstall the background service?"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -785,30 +1039,48 @@
       }
     },
     "dashboard.interfaces.empty.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect an Ethernet adapter or turn on Wi-Fi, then refresh."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连接 Ethernet 适配器或启用 Wi-Fi，然后刷新此视图。"
+            "value" : "连接以太网适配器或打开 Wi-Fi，然后刷新。"
           }
         }
       }
     },
     "dashboard.interfaces.empty.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Wi-Fi or Ethernet interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有支持的网络接口"
+            "value" : "没有 Wi-Fi 或以太网接口"
           }
         }
       }
     },
     "dashboard.interfaces.show_all" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -818,8 +1090,14 @@
       }
     },
     "dashboard.interfaces.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -829,30 +1107,48 @@
       }
     },
     "dashboard.metric.active" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In use"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前活动"
+            "value" : "使用中"
           }
         }
       }
     },
     "dashboard.metric.active.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected or carrying traffic"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前正在使用的接口"
+            "value" : "已连接或正在传输数据"
           }
         }
       }
     },
     "dashboard.metric.hardware" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -862,41 +1158,65 @@
       }
     },
     "dashboard.metric.hardware.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visible to every network you join"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "修改前请检查接口"
+            "value" : "你加入的每个网络都能看到它"
           }
         }
       }
     },
     "dashboard.metric.interfaces" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "支持的接口"
+            "value" : "网络接口"
           }
         }
       }
     },
     "dashboard.metric.interfaces.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi and Ethernet adapters"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wi-Fi 与 Ethernet 适配器"
+            "value" : "Wi-Fi 与以太网适配器"
           }
         }
       }
     },
     "dashboard.subtitle" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See the MAC address your network interfaces are using right now."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -906,8 +1226,14 @@
       }
     },
     "dashboard.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -916,32 +1242,355 @@
         }
       }
     },
-    "English" : {
-
-    },
-    "error.wifi_associated_write_rejected.message" : {
+    "disruption.wifi" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi drivers only accept a new address while disconnected. MACDancer will disconnect %@, change the address, and macOS will rejoin the network by itself. If Private Wi-Fi Address is on for that network, macOS may replace the new address when it rejoins."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "macOS 或 Wi-Fi 驱动未接受在网络保持连接时修改 MAC。MACDancer 没有主动断开或重新连接 Wi-Fi。请先断开 Wi-Fi，等待接口显示为未关联，然后重试。"
+            "value" : "Wi-Fi 驱动只在断开时接受新地址。MACDancer 会断开 %@、修改地址，之后 macOS 会自动重新加入网络。如果该网络开启了“私有 Wi-Fi 地址”，macOS 重新连接时可能会换掉新地址。"
           }
         }
       }
     },
-    "error.wifi_associated_write_rejected.title" : {
+    "disruption.wired" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is in use. Its connection may drop for a moment while macOS applies the new address."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wi-Fi 连接时无法修改 MAC"
+            "value" : "%@ 正在使用中。macOS 应用新地址时，连接可能会短暂中断。"
+          }
+        }
+      }
+    },
+    "error.address_in_use" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is already used by another interface."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已被另一个接口使用。"
+          }
+        }
+      }
+    },
+    "error.busy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another MAC change on %@ is still running."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上的另一项 MAC 修改仍在进行。"
+          }
+        }
+      }
+    },
+    "error.command" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS rejected the MAC change: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 拒绝了 MAC 修改：%@"
+          }
+        }
+      }
+    },
+    "error.confirmation_required" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This interface is in use. Confirm the possible interruption first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此接口正在使用中，请先确认可能出现的断网。"
+          }
+        }
+      }
+    },
+    "error.daemon_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service is unavailable: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台服务不可用：%@"
+          }
+        }
+      }
+    },
+    "error.generation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not generate an unused random MAC address."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法生成未被使用的随机 MAC 地址。"
+          }
+        }
+      }
+    },
+    "error.global_address" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a globally administered (vendor) address and needs an extra confirmation."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是全局管理（厂商）地址，需要额外确认。"
+          }
+        }
+      }
+    },
+    "error.history_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is not in this interface's history."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不在此接口的历史记录中。"
+          }
+        }
+      }
+    },
+    "error.interface_not_found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network interface %@ was not found."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到网络接口 %@。"
+          }
+        }
+      }
+    },
+    "error.invalid_request" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid request: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无效请求：%@"
+          }
+        }
+      }
+    },
+    "error.legacy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LinkLiar's background service is installed. Remove it before MACDancer changes MAC addresses."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到 LinkLiar 的后台服务。请先移除它，MACDancer 才会修改 MAC 地址。"
+          }
+        }
+      }
+    },
+    "error.no_hardware" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS did not report a hardware MAC address for this interface."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 没有报告此接口的硬件 MAC 地址。"
+          }
+        }
+      }
+    },
+    "error.persistence" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not save MACDancer settings: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存 MACDancer 设置：%@"
+          }
+        }
+      }
+    },
+    "error.protocol" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app (protocol %1$d) and the background service (protocol %2$d) are from different builds. Use Repair connection."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App（协议 %1$d）与后台服务（协议 %2$d）来自不同的构建。请点击“修复连接”。"
+          }
+        }
+      }
+    },
+    "error.readback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS still reports %1$@ instead of %2$@. The driver did not accept the new address."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 读到的仍是 %1$@，而不是 %2$@。驱动没有接受新地址。"
+          }
+        }
+      }
+    },
+    "error.timeout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service did not answer in time. The current state is being re-read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台服务没有及时响应，正在重新读取当前状态。"
+          }
+        }
+      }
+    },
+    "error.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is not a Wi-Fi or Ethernet interface."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不是 Wi-Fi 或以太网接口。"
+          }
+        }
+      }
+    },
+    "error.wifi_disconnect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi did not disconnect, so the MAC address was not changed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi 未能断开，因此没有修改 MAC 地址。"
           }
         }
       }
     },
     "history.clear.action" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear History"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -951,19 +1600,31 @@
       }
     },
     "history.clear.confirmation.message" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes saved MAC choices for this interface. It does not change the current MAC address or policy."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这会移除此接口保存的 MAC 选项，但不会修改当前 MAC 或策略。"
+            "value" : "这会移除此接口保存的 MAC 记录，但不会修改当前 MAC 或策略。"
           }
         }
       }
     },
     "history.clear.confirmation.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear this interface’s MAC history?"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -973,8 +1634,14 @@
       }
     },
     "history.copy" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy this address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -984,30 +1651,48 @@
       }
     },
     "history.delete" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete this history entry"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "删除此历史记录"
+            "value" : "删除此记录"
           }
         }
       }
     },
-    "history.disclosure.count_format" : {
-      "extractionState" : "stale",
+    "history.disclosure" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History (%1$d of %2$d)"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "历史（%d/20）"
+            "value" : "历史记录（%1$d / %2$d）"
           }
         }
       }
     },
     "history.source.generated_local" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generated locally"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1017,8 +1702,14 @@
       }
     },
     "history.source.history_restore" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restored from history"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1028,19 +1719,31 @@
       }
     },
     "history.source.user_specified" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Specified by you"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户指定"
+            "value" : "你指定的"
           }
         }
       }
     },
     "history.source.vendor_compatible" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vendor-compatible"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1050,8 +1753,14 @@
       }
     },
     "interface.action.copy" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy current MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1060,9 +1769,32 @@
         }
       }
     },
-    "interface.action.randomize" : {
-      "extractionState" : "stale",
+    "interface.action.copy_hardware" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy hardware MAC"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制硬件 MAC"
+          }
+        }
+      }
+    },
+    "interface.action.randomize" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randomize now"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1072,8 +1804,14 @@
       }
     },
     "interface.action.restore" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1083,19 +1821,31 @@
       }
     },
     "interface.active" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In use"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "活动"
+            "value" : "使用中"
           }
         }
       }
     },
     "interface.current_mac" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1105,8 +1855,14 @@
       }
     },
     "interface.default_route" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default route"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1116,8 +1872,14 @@
       }
     },
     "interface.disruption_notice" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes require confirmation"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1127,8 +1889,14 @@
       }
     },
     "interface.hardware_mac" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1138,52 +1906,184 @@
       }
     },
     "interface.using_hardware" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在使用硬件 MAC"
+            "value" : "硬件 MAC"
+          }
+        }
+      }
+    },
+    "interface.wifi_connected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已连接"
+          }
+        }
+      }
+    },
+    "interface.wifi_notice" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing it disconnects Wi-Fi briefly"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改时会短暂断开 Wi-Fi"
+          }
+        }
+      }
+    },
+    "interface.working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing the address…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在修改地址…"
+          }
+        }
+      }
+    },
+    "interface.working_wifi" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing the address; Wi-Fi reconnects afterwards…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在修改地址，之后 Wi-Fi 会重新连接…"
           }
         }
       }
     },
     "interfaces.empty.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer lists the Wi-Fi and Ethernet adapters macOS reports."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 会列出 macOS 报告为可用的 Wi-Fi 和 Ethernet 适配器。"
+            "value" : "MACDancer 会列出 macOS 报告的 Wi-Fi 和以太网适配器。"
           }
         }
       }
     },
     "interfaces.empty.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No interfaces to show"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有找到支持的接口"
+            "value" : "没有可显示的接口"
+          }
+        }
+      }
+    },
+    "interfaces.hidden_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d hidden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已隐藏 %d 个"
+          }
+        }
+      }
+    },
+    "interfaces.show_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Thunderbolt, bridge and virtual interfaces"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示雷雳、网桥和虚拟接口"
           }
         }
       }
     },
     "interfaces.subtitle" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current values are read directly from macOS. Changing a MAC is always an explicit action."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前值直接从 macOS 读取；修改 MAC 始终需要明确操作。"
+            "value" : "当前值直接从 macOS 读取；修改 MAC 始终需要你明确操作。"
           }
         }
       }
     },
     "interfaces.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1193,8 +2093,14 @@
       }
     },
     "mac.unavailable" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1204,8 +2110,14 @@
       }
     },
     "menu_bar.open" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open MACDancer"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1215,8 +2127,14 @@
       }
     },
     "menu_bar.quit" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quit MACDancer"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1226,8 +2144,14 @@
       }
     },
     "menu_bar.refresh" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh MAC addresses"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1237,19 +2161,31 @@
       }
     },
     "menu_bar.settings" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设置"
+            "value" : "设置…"
           }
         }
       }
     },
     "menu_bar.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1258,75 +2194,49 @@
         }
       }
     },
-    "operation_state.cancelled" : {
-      "extractionState" : "stale",
+    "notice.address_replaced" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After Wi-Fi reconnected, macOS replaced %1$@ with %2$@. Turn off Private Wi-Fi Address for this network in System Settings to keep your own address."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已取消"
+            "value" : "Wi-Fi 重新连接后，macOS 把 %1$@ 换成了 %2$@。如需保留自己的地址，请在系统设置中关闭这个网络的“私有 Wi-Fi 地址”。"
           }
         }
       }
     },
-    "operation_state.deferred" : {
-      "extractionState" : "stale",
+    "operation.automatic" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "为安全起见已延后"
+            "value" : "Rotated automatically"
           }
-        }
-      }
-    },
-    "operation_state.failed" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "需要处理"
-          }
-        }
-      }
-    },
-    "operation_state.pending" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待处理"
-          }
-        }
-      }
-    },
-    "operation_state.running" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "处理中"
-          }
-        }
-      }
-    },
-    "operation_state.succeeded" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已是最新"
+            "value" : "已自动轮换"
           }
         }
       }
     },
     "operation.handoff" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handed off to macOS"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1336,8 +2246,14 @@
       }
     },
     "operation.randomize" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randomized"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1347,8 +2263,14 @@
       }
     },
     "operation.reconcile" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconciled"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1358,8 +2280,14 @@
       }
     },
     "operation.restore_hardware" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restored hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1369,8 +2297,14 @@
       }
     },
     "operation.restore_history" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restored from history"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1380,8 +2314,14 @@
       }
     },
     "operation.restore_specified" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applied specified MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1390,9 +2330,83 @@
         }
       }
     },
-    "policy.action.menu" : {
-      "extractionState" : "stale",
+    "operation_state.failed" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "失败"
+          }
+        }
+      }
+    },
+    "operation_state.running" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "处理中…"
+          }
+        }
+      }
+    },
+    "operation_state.succeeded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verified"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已验证"
+          }
+        }
+      }
+    },
+    "pending.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
+        }
+      }
+    },
+    "policy.action.menu" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Policy"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1402,30 +2416,48 @@
       }
     },
     "policy.action.random" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotate automatically (random policy)"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用随机策略"
+            "value" : "自动轮换（随机策略）"
           }
         }
       }
     },
     "policy.action.system_managed" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop managing (hand off to macOS)"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "交还 macOS 管理…"
+            "value" : "停止管理（交还 macOS）"
           }
         }
       }
     },
     "policy.random" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Random MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1435,8 +2467,14 @@
       }
     },
     "policy.specified_format" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Specified: %@"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1446,8 +2484,14 @@
       }
     },
     "policy.system_managed" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Managed by macOS"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1456,75 +2500,66 @@
         }
       }
     },
-    "randomize.confirmation.action" : {
-      "extractionState" : "stale",
+    "randomize.confirm.action" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change MAC address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "立即随机化"
+            "value" : "修改 MAC 地址"
           }
         }
       }
     },
-    "randomize.confirmation.message" : {
-      "extractionState" : "stale",
+    "randomize.confirm.title" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change the MAC address of %@?"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这是活动接口或默认路由接口，macOS 应用新 MAC 时连接可能中断。"
+            "value" : "修改 %@ 的 MAC 地址？"
           }
         }
       }
     },
-    "randomize.confirmation.title" : {
-      "extractionState" : "stale",
+    "randomize.confirm.wifi_action" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "修改此 MAC 地址可能中断连接"
+            "value" : "Disconnect and change"
           }
-        }
-      }
-    },
-    "refresh.last_updated_format" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最后更新：%@"
-          }
-        }
-      }
-    },
-    "refresh.read_only" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刷新只读取当前 MAC 地址，不会修改网络。"
-          }
-        }
-      }
-    },
-    "refresh.reading" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在读取当前 MAC 地址…"
+            "value" : "断开并修改"
           }
         }
       }
     },
     "restore.action.handoff" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand off to macOS"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1534,8 +2569,14 @@
       }
     },
     "restore.action.hardware" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1545,8 +2586,14 @@
       }
     },
     "restore.action.history" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore selected MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1556,8 +2603,14 @@
       }
     },
     "restore.action.specified" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply specified MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1567,8 +2620,14 @@
       }
     },
     "restore.current_format" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current: %@"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1578,8 +2637,14 @@
       }
     },
     "restore.destination.hardware" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use hardware MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1589,8 +2654,14 @@
       }
     },
     "restore.destination.history" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use this interface’s history"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1600,8 +2671,14 @@
       }
     },
     "restore.destination.specified" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a specified MAC"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1611,8 +2688,14 @@
       }
     },
     "restore.destination.system_managed" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand off to macOS"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1622,8 +2705,14 @@
       }
     },
     "restore.destination.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose what to use"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1632,20 +2721,15 @@
         }
       }
     },
-    "restore.disruption.detail" : {
-      "extractionState" : "stale",
+    "restore.disruption.title" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此接口处于活动状态或承载默认路由；应用所选 MAC 时 macOS 可能会断开连接。"
+            "value" : "I understand this can interrupt my connection"
           }
-        }
-      }
-    },
-    "restore.disruption.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1654,119 +2738,66 @@
         }
       }
     },
-    "restore.guide.step1" : {
-      "extractionState" : "stale",
+    "restore.disruption.wifi_title" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect Wi-Fi to apply this address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. MACDancer 取消排队任务，等待当前请求结束，并永久停止写入此接口。"
+            "value" : "断开 Wi-Fi 以应用此地址"
           }
         }
       }
     },
-    "restore.guide.step2" : {
-      "extractionState" : "stale",
+    "restore.gone" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "2. daemon 确认交还后会打开网络设置；请在那里手动选择关闭、固定或轮替。"
+            "value" : "This interface is no longer available."
           }
-        }
-      }
-    },
-    "restore.guide.step3" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "3. 若控件仍不可用，让 MACDancer 保持只读，重启 Mac，并检查 MDM 或配置描述文件限制。"
-          }
-        }
-      }
-    },
-    "restore.guide.step4" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4. 最后才忘记并重新加入网络；这可能影响已存密码、企业认证和 iCloud 钥匙串。"
-          }
-        }
-      }
-    },
-    "restore.guide.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后续步骤"
+            "value" : "这个接口已不可用。"
           }
         }
       }
     },
     "restore.hardware.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "应用 macOS 为此接口报告的出厂 MAC 地址。"
+            "value" : "Write back the factory address macOS reports for this interface."
           }
-        }
-      }
-    },
-    "restore.hardware.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "硬件 MAC"
-          }
-        }
-      }
-    },
-    "restore.history.empty" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此接口尚未记录以前使用的 MAC 地址。"
-          }
-        }
-      }
-    },
-    "restore.history.first_used" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "首次使用：%@"
-          }
-        }
-      }
-    },
-    "restore.history.last_used" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近使用：%@"
+            "value" : "写回 macOS 为此接口报告的出厂地址。"
           }
         }
       }
     },
     "restore.history.picker" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous MAC address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1775,31 +2806,32 @@
         }
       }
     },
-    "restore.history.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此接口的 MAC 地址历史"
-          }
-        }
-      }
-    },
     "restore.private_wifi.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private Wi-Fi Address (Off, Fixed or Rotating) is a per-network macOS setting. MACDancer cannot change it; open Network Settings to choose."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 无法启用或修改每个网络的“私有 Wi-Fi 地址”。请在系统设置中查看该选项。"
+            "value" : "“私有 Wi-Fi 地址”（关闭、固定或轮替）是 macOS 按网络管理的设置，MACDancer 无法修改。请打开网络设置自行选择。"
           }
         }
       }
     },
     "restore.private_wifi.open" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Network Settings"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1808,42 +2840,49 @@
         }
       }
     },
-    "restore.private_wifi.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私有 Wi-Fi 地址由 macOS 管理"
-          }
-        }
-      }
-    },
     "restore.specified.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Addresses starting with x2, x6, xA or xE are locally administered and the safest choice."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 会先验证地址，再把请求发送给后台服务。"
+            "value" : "第二位是 2、6、A 或 E 的地址属于本地管理地址，是最安全的选择。"
           }
         }
       }
     },
     "restore.specified.global_warning.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This address can impersonate a globally assigned device identity. Use it only when you own the address and understand the collision risk."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该地址可能冒充全局分配的设备身份。只有在你拥有此地址并了解冲突风险时才使用。"
+            "value" : "该地址可能冒充一个全局分配的设备身份。只有在你拥有此地址并了解冲突风险时才使用。"
           }
         }
       }
     },
     "restore.specified.global_warning.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I understand this is not a locally administered address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1853,19 +2892,31 @@
       }
     },
     "restore.specified.invalid" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a unicast 48-bit MAC address, for example 02:1a:2b:3c:4d:5e."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请输入有效的 48 位单播 MAC，例如 aa:bb:cc:dd:ee:ff。"
+            "value" : "请输入 48 位单播 MAC 地址，例如 02:1a:2b:3c:4d:5e。"
           }
         }
       }
     },
     "restore.specified.placeholder" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aa:bb:cc:dd:ee:ff"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1874,53 +2925,49 @@
         }
       }
     },
-    "restore.specified.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指定 MAC"
-          }
-        }
-      }
-    },
     "restore.system_managed.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer stops writing to this interface and cancels its pending rotations. The current address is left as it is."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "停止由 MACDancer 管理此接口，并把责任交还 macOS；这不会假装能够配置“私有 Wi-Fi 地址”。"
+            "value" : "MACDancer 将停止写入此接口，并取消它待处理的轮换。当前地址保持不变。"
           }
         }
       }
     },
     "restore.system_managed.different_mac" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前 MAC 与硬件地址不同。仅交还管理权不会写回硬件地址；若要执行这项会中断连接的恢复，请在上方选择“使用硬件 MAC”。"
+            "value" : "The current MAC is not the hardware address. Choose “Use hardware MAC” to write it back."
           }
-        }
-      }
-    },
-    "restore.system_managed.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "交还 macOS 管理"
+            "value" : "当前 MAC 不是硬件地址。如需写回硬件地址，请选择“使用硬件 MAC”。"
           }
         }
       }
     },
     "restore.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore MAC address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1930,8 +2977,14 @@
       }
     },
     "section.automation" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automation"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1941,8 +2994,14 @@
       }
     },
     "section.dashboard" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1952,8 +3011,14 @@
       }
     },
     "section.interfaces" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interfaces"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1963,8 +3028,14 @@
       }
     },
     "section.settings" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1973,53 +3044,66 @@
         }
       }
     },
-    "settings.daemon.detail" : {
-      "extractionState" : "stale",
+    "settings.diagnostics.daemon_version" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background service version"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请在概览中安装、批准、修复或移除服务；其状态与可见接口值会分别展示。"
+            "value" : "后台服务版本"
           }
         }
       }
     },
-    "settings.daemon.show" : {
-      "extractionState" : "stale",
+    "settings.diagnostics.last_read" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last read"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示概览"
+            "value" : "上次读取"
           }
         }
       }
     },
-    "settings.daemon.title" : {
-      "extractionState" : "stale",
+    "settings.diagnostics.logs" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "后台服务"
+            "value" : "The service logs to Console under the subsystem local.macdancer.MACDancer."
           }
-        }
-      }
-    },
-    "settings.diagnostics.health" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "daemon 健康状态"
+            "value" : "后台服务的日志可在“控制台”中按子系统 local.macdancer.MACDancer 查看。"
           }
         }
       }
     },
     "settings.diagnostics.protocol" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protocol"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2028,42 +3112,49 @@
         }
       }
     },
-    "settings.diagnostics.reachability" : {
-      "extractionState" : "stale",
+    "settings.diagnostics.status" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background service"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XPC 可达性"
+            "value" : "后台服务"
           }
         }
       }
     },
-    "settings.diagnostics.registration" : {
-      "extractionState" : "stale",
+    "settings.diagnostics.title" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "注册状态"
+            "value" : "Diagnostics"
           }
-        }
-      }
-    },
-    "settings.diagnostics.toggle" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示诊断详情"
+            "value" : "诊断信息"
           }
         }
       }
     },
     "settings.language.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a language for MACDancer without changing the macOS system language."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2073,8 +3164,14 @@
       }
     },
     "settings.language.system" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System Default"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2084,8 +3181,14 @@
       }
     },
     "settings.language.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2095,30 +3198,31 @@
       }
     },
     "settings.menu_bar.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A small menu with current addresses. The main window and Dock icon stay available when it is off."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保留一个状态菜单快捷入口。关闭后，主窗口和 Dock 图标仍可使用。"
+            "value" : "一个显示当前地址的小菜单。关闭后，主窗口和 Dock 图标仍可使用。"
           }
         }
       }
     },
     "settings.menu_bar.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示菜单栏图标"
+            "value" : "Show menu bar icon"
           }
-        }
-      }
-    },
-    "settings.menu_bar.toggle" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2128,19 +3232,31 @@
       }
     },
     "settings.private_wifi.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS can use its own private address per Wi-Fi network. When it is on, macOS may replace MACDancer’s address whenever it rejoins that network. Turn it off for networks where you want your own address."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“私有 Wi-Fi 地址”是 macOS 按网络管理的设置。MACDancer 可以说明并打开系统设置，但不会代你修改。"
+            "value" : "macOS 可以为每个 Wi-Fi 网络使用自己的私有地址。开启时，macOS 每次重新加入该网络都可能替换 MACDancer 设置的地址。想使用自己地址的网络，请把它关闭。"
           }
         }
       }
     },
     "settings.private_wifi.open" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Network Settings"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2150,8 +3266,14 @@
       }
     },
     "settings.private_wifi.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private Wi-Fi Address"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2160,53 +3282,66 @@
         }
       }
     },
-    "settings.refresh.detail" : {
-      "extractionState" : "stale",
+    "settings.show_all.detail" : {
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also list Thunderbolt ports, bridges and virtual adapters. They are hidden because their addresses rarely matter."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "刷新只向 macOS 读取每个接口当前的 MAC；不会联系 daemon、扫描 Wi-Fi、写配置或断开网络。"
+            "value" : "同时列出雷雳端口、网桥和虚拟适配器。默认隐藏它们，因为它们的地址很少需要关心。"
           }
         }
       }
     },
-    "settings.refresh.last_updated" : {
-      "extractionState" : "stale",
+    "settings.show_all.title" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上次读取：%@"
+            "value" : "Show all interfaces"
           }
-        }
-      }
-    },
-    "settings.refresh.title" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只读刷新"
+            "value" : "显示所有接口"
           }
         }
       }
     },
     "settings.subtitle" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose how MACDancer looks and how it generates addresses."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择 MACDancer 的显示方式，并了解哪些隐私设置由 macOS 自行管理。"
+            "value" : "选择 MACDancer 的显示方式，以及生成地址的方式。"
           }
         }
       }
     },
     "settings.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2216,19 +3351,31 @@
       }
     },
     "settings.vendor.detail" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep the interface’s hardware vendor prefix and randomize the rest. Some strict networks need this, but it reveals the device vendor and is less private."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用此接口经验证的硬件 OUI，并随机生成后三字节。这可能兼容严格网络，但会暴露设备厂商并降低隐私。"
+            "value" : "保留接口硬件的厂商前缀，只随机化后半部分。一些严格的网络需要这样，但会暴露设备厂商，隐私性更低。"
           }
         }
       }
     },
     "settings.vendor.title" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vendor-OUI compatibility mode"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2237,20 +3384,15 @@
         }
       }
     },
-    "settings.vendor.warning" : {
-      "extractionState" : "stale",
+    "time.never" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MACDancer 不接受 GUI 提供的任意厂商 OUI；若硬件 OUI 不可用，会安全地拒绝随机化。"
+            "value" : "Never"
           }
-        }
-      }
-    },
-    "time.never" : {
-      "extractionState" : "stale",
-      "localizations" : {
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2260,8 +3402,14 @@
       }
     },
     "toolbar.refresh" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2271,8 +3419,14 @@
       }
     },
     "toolbar.refresh_help" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read current MAC addresses only. This never changes your network."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2281,8 +3435,481 @@
         }
       }
     },
-    "简体中文" : {
-
+    "trigger.after_wake" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queued after wake"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "唤醒后已排队"
+          }
+        }
+      }
+    },
+    "trigger.became_inactive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queued when the interface became inactive"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接口停止使用时已排队"
+          }
+        }
+      }
+    },
+    "trigger.before_sleep" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queued before sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "睡眠前已排队"
+          }
+        }
+      }
+    },
+    "update.auto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for updates automatically once a day"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每天自动检查一次更新"
+          }
+        }
+      }
+    },
+    "update.available" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@ is available."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新版本 %@ 可用。"
+          }
+        }
+      }
+    },
+    "update.banner.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You have %@. The update installs in place and MACDancer restarts."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你当前是 %@。更新会原地安装，然后 MACDancer 自动重启。"
+          }
+        }
+      }
+    },
+    "update.banner.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer %@ is available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer %@ 已发布"
+          }
+        }
+      }
+    },
+    "update.blocked.location" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer cannot write to the folder it is in. Move it to Applications or download the release manually."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer 无法写入它所在的文件夹。请把它移到“应用程序”文件夹，或手动下载新版本。"
+          }
+        }
+      }
+    },
+    "update.blocked.unsigned" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This build is not signed with a developer team, so updates cannot be verified. Download the release manually."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个构建没有用开发者 Team 签名，无法验证更新。请手动下载新版本。"
+          }
+        }
+      }
+    },
+    "update.check" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即检查"
+          }
+        }
+      }
+    },
+    "update.checking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking GitHub for a newer release…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查 GitHub 上的新版本…"
+          }
+        }
+      }
+    },
+    "update.current" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed version: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装版本：%@"
+          }
+        }
+      }
+    },
+    "update.downloading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading the update…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载更新…"
+          }
+        }
+      }
+    },
+    "update.error.http" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub answered with HTTP %d."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub 返回了 HTTP %d。"
+          }
+        }
+      }
+    },
+    "update.error.signature" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The update is not signed by the same developer as this copy of MACDancer, so it was not installed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个更新与当前 MACDancer 不是同一开发者签名，已拒绝安装。"
+          }
+        }
+      }
+    },
+    "update.error.unpack" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The downloaded archive does not contain MACDancer.app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载的压缩包里没有 MACDancer.app。"
+          }
+        }
+      }
+    },
+    "update.error.version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The downloaded app is not the expected version, so it was not installed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载的 App 不是预期的版本，已拒绝安装。"
+          }
+        }
+      }
+    },
+    "update.install" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install and Relaunch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装并重启"
+          }
+        }
+      }
+    },
+    "update.installing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifying the signature and installing…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在校验签名并安装…"
+          }
+        }
+      }
+    },
+    "update.relaunch_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The update is installed. Quit and reopen MACDancer to start it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新已安装。请退出并重新打开 MACDancer。"
+          }
+        }
+      }
+    },
+    "update.release_notes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release notes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新说明"
+          }
+        }
+      }
+    },
+    "update.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新"
+          }
+        }
+      }
+    },
+    "update.up_to_date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer is up to date."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MACDancer 已是最新版本。"
+          }
+        }
+      }
+    },
+    "wait.busy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting for another change to finish"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待另一项修改完成"
+          }
+        }
+      }
+    },
+    "wait.default_route" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting until it no longer carries the default route"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待它不再承载默认路由"
+          }
+        }
+      }
+    },
+    "wait.in_use" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting until the interface is no longer in use"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待接口不再使用"
+          }
+        }
+      }
+    },
+    "wait.missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting for the adapter to be connected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待适配器接入"
+          }
+        }
+      }
+    },
+    "wait.wifi_connected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting until Wi-Fi is disconnected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待 Wi-Fi 断开"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -10,3 +10,8 @@ ENABLE_HARDENED_RUNTIME = YES
 
 // Optional, untracked per-machine signing configuration.
 #include? "Local.xcconfig"
+
+// The single source of the app version. bin/make-release reads it, and the
+// in-app updater compares it with the latest GitHub release.
+MARKETING_VERSION = 2.0.0
+CURRENT_PROJECT_VERSION = 2

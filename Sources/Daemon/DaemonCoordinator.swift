@@ -1,811 +1,522 @@
 import Foundation
 
+enum SystemEvent: Equatable, Sendable {
+  case willSleep
+  case didWake
+  case networkChanged
+}
+
+/// The daemon's state machine. All state lives on one serial queue that never
+/// blocks on a MAC write: writes run on `workQueue`, so status requests and
+/// heartbeats are answered immediately even while `ifconfig` is running.
 final class DaemonCoordinator: @unchecked Sendable {
-  private let queue = DispatchQueue(label: "local.macdancer.MACDancer.daemon.coordinator")
-  private let interfaceProvider: any ReadOnlyInterfaceProviding
-  private let setter: MACSetter
-  private let store: ConfigurationStore
+  struct Environment {
+    var reader: InterfaceReading
+    var writer: MACWriting
+    var store: ConfigurationStoring
+    /// Must be cheap; the daemon caches the real (forking) check.
+    var legacyServiceDetected: @Sendable () -> Bool
+    var now: @Sendable () -> Date = { Date() }
+    var random: RandomBytes = secureRandomBytes
+    var workQueue = DispatchQueue(label: "local.macdancer.MACDancer.daemon.work")
+    /// After a Wi-Fi disconnect, when to check whether macOS rejoined with its own address.
+    var wifiFollowUpDelay: TimeInterval = 30
+    /// After wake, give the network time to settle before automatic work.
+    var wakeSettleDelay: TimeInterval = 10
+    /// Reported to the GUI for diagnostics.
+    var version: String? = nil
+  }
+
+  typealias Reply = (Result<DaemonSnapshot, MACDancerError>) -> Void
+
+  private let queue = DispatchQueue(label: "local.macdancer.MACDancer.daemon.state")
+  private let env: Environment
   private let instanceID = UUID()
-  private var configuration: ConfigurationDocument
-  private var interfacesByID: [String: InterfaceSnapshot] = [:]
+
+  private var document: ConfigurationDocument
+  private var savedDocument: ConfigurationDocument
+  /// Raw facts from the last read, keyed by BSD name.
+  private var observed: [String: InterfaceSnapshot] = [:]
+  // Keyed by device key, so they follow the adapter rather than the BSD name.
+  private var lastOperations: [String: OperationRecord] = [:]
+  private var notices: [String: InterfaceNotice] = [:]
+  // Keyed by BSD name.
+  private var busy: Set<String> = []
+  private var lastWriteAt: [String: Date] = [:]
+  private var warnings: [String: String] = [:]
   private var revision: UInt64 = 0
-  private var lastError: String?
-  private var persistentFault: String?
+  private var lastPublishedContent: DaemonSnapshot?
   private var subscribers: [UUID: (DaemonSnapshot) -> Void] = [:]
-  private var completedOperations: [UUID: OperationResult] = [:]
-  private var pendingAutomaticInterfaces: Set<String> = []
-  private var healthTimer: DispatchSourceTimer?
 
-  init(
-    interfaceProvider: any ReadOnlyInterfaceProviding = SystemReadOnlyInterfaceProvider(),
-    setter: MACSetter? = nil,
-    store: ConfigurationStore = ConfigurationStore()
-  ) {
-    self.interfaceProvider = interfaceProvider
-    self.setter = setter ?? MACSetter(interfaceProvider: interfaceProvider)
-    self.store = store
-    do {
-      configuration = try store.loadOrCreateDocument()
-    } catch {
-      configuration = ConfigurationDocument()
-      persistentFault = "Configuration load failed: \(error.localizedDescription)"
+  init(environment: Environment) {
+    env = environment
+    let loaded = environment.store.load()
+    document = loaded.document
+    savedDocument = loaded.document
+    if let warning = loaded.warning {
+      warnings["load"] = warning
+      Log.daemon.error("\(warning, privacy: .public)")
     }
-    queue.sync { reconcileLocked(reason: "daemon startup") }
-    let pendingCountBeforeValidation = configuration.pendingOperations.count
-    pendingAutomaticInterfaces = Set(
-      configuration.pendingOperations
-        .filter { $0.state == .pending || $0.state == .deferred }
-        .compactMap { operation in
-          guard let interface = interfacesByID[operation.interfaceID],
-                operation.deviceKey == configurationKey(for: interface) else { return nil }
-          return operation.interfaceID
-        }
-    )
-    configuration.pendingOperations.removeAll { operation in
-      guard operation.state == .pending || operation.state == .deferred,
-            let interface = interfacesByID[operation.interfaceID] else { return true }
-      return operation.deviceKey != configurationKey(for: interface)
-    }
-    if configuration.pendingOperations.count != pendingCountBeforeValidation {
-      do { try store.save(configuration) }
-      catch { persistentFault = "Configuration cleanup failed: \(error.localizedDescription)" }
-    }
-
-    let timer = DispatchSource.makeTimerSource(queue: queue)
-    timer.schedule(deadline: .now() + .seconds(30), repeating: .seconds(30), leeway: .seconds(2))
-    timer.setEventHandler { [weak self] in
-      guard let self else { return }
-      self.reconcileLocked(reason: "periodic health calibration")
-      self.executeSafePendingAutomaticOperationsLocked()
-    }
-    healthTimer = timer
-    timer.resume()
+    queue.sync { readLocked() }
   }
 
-  deinit {
-    healthTimer?.setEventHandler {}
-    healthTimer?.cancel()
+  // MARK: - Entry points
+
+  func handle(_ request: DaemonRequest, reply: @escaping Reply) {
+    queue.async { self.handleLocked(request, reply: reply) }
   }
 
-  func snapshot(completion: @escaping (DaemonSnapshot) -> Void) {
-    queue.async { completion(self.snapshotLocked()) }
+  func handle(_ event: SystemEvent) {
+    queue.async { self.handleLocked(event) }
+  }
+
+  /// Periodic calibration: notices changes nobody announced, retries a failed
+  /// save and runs pending rotations whose interface became safe.
+  func tick() {
+    queue.async {
+      self.readLocked()
+      self.runPendingLocked()
+      self.persistLocked()
+      self.publishLocked()
+    }
+  }
+
+  func setWarning(_ key: String, _ message: String?) {
+    queue.async {
+      self.warnings[key] = message
+      self.publishLocked()
+    }
   }
 
   @discardableResult
   func addSubscriber(_ subscriber: @escaping (DaemonSnapshot) -> Void) -> UUID {
     let id = UUID()
-    queue.async {
-      self.subscribers[id] = subscriber
-      subscriber(self.snapshotLocked())
-    }
+    queue.async { self.subscribers[id] = subscriber }
     return id
   }
 
-  func removeSubscriber(_ id: UUID) { queue.async { self.subscribers.removeValue(forKey: id) } }
+  func removeSubscriber(_ id: UUID) {
+    queue.async { self.subscribers[id] = nil }
+  }
 
-  func reconcile(reason: String) { queue.async { self.reconcileLocked(reason: reason) } }
+  /// Runs `body` on the state queue only if no MAC write is in flight. While
+  /// it runs no new write can start, so `body` may safely exit the process.
+  func whenIdle(_ body: () -> Void) {
+    queue.sync { if busy.isEmpty { body() } }
+  }
 
-  func reportHealthFault(_ message: String) {
-    queue.async {
-      self.persistentFault = message
+  /// Runs `body` on the state queue after all previously queued work. Tests use this.
+  func sync<T>(_ body: () -> T) -> T { queue.sync(execute: body) }
+
+  // MARK: - Requests
+
+  private func handleLocked(_ request: DaemonRequest, reply: @escaping Reply) {
+    switch request {
+    case .snapshot, .subscribe:
+      reply(.success(snapshotLocked()))
+
+    case let .setPolicy(id, choice):
+      readLocked()
+      guard let interface = supportedInterfaceLocked(id, reply: reply) else { return }
+      if choice == .random && env.legacyServiceDetected() { return reply(.failure(.legacyServiceConflict)) }
+      document.policies[interface.deviceKey] = choice == .random ? .random : .systemManaged
+      if choice == .systemManaged { document.pendingRotations[interface.deviceKey] = nil }
+      commitLocked(reply: reply)
+
+    case let .randomize(id, confirmed):
+      guard !env.legacyServiceDetected() else { return reply(.failure(.legacyServiceConflict)) }
+      readLocked()
+      guard let interface = supportedInterfaceLocked(id, reply: reply) else { return }
+      if case let .denied(error) = SafetyPolicy.manual(interface, confirmedDisruption: confirmed) {
+        return reply(.failure(error))
+      }
+      do {
+        let (target, source) = try generateLocked(for: interface)
+        startWriteLocked(
+          interface, target: target, kind: .randomize, source: source,
+          resultingPolicy: .random, disconnectWiFi: confirmed, reply: reply
+        )
+      } catch {
+        reply(.failure(MACDancerError(error)))
+      }
+
+    case let .restore(id, target, confirmed):
+      restoreLocked(id, target: target, confirmed: confirmed, reply: reply)
+
+    case let .removeHistory(id, address):
+      readLocked()
+      guard let interface = observed[id].map(managedLocked) else { return reply(.failure(.interfaceNotFound(id))) }
+      var ledger = document.histories[interface.deviceKey] ?? HistoryLedger()
+      if let address { ledger.remove(address) } else { ledger.removeAll() }
+      document.histories[interface.deviceKey] = ledger.entries.isEmpty ? nil : ledger
+      commitLocked(reply: reply)
+
+    case let .cancelPending(id):
+      if let id {
+        guard let interface = observed[id] else { return reply(.failure(.interfaceNotFound(id))) }
+        document.pendingRotations[interface.deviceKey] = nil
+      } else {
+        document.pendingRotations.removeAll()
+      }
+      commitLocked(reply: reply)
+
+    case let .updateAutomation(settings):
+      if (settings.rotatesAutomatically || settings.vendorCompatibility) && env.legacyServiceDetected() {
+        return reply(.failure(.legacyServiceConflict))
+      }
+      document.automation = settings
+      if !settings.rotatesAutomatically { document.pendingRotations.removeAll() }
+      commitLocked(reply: reply)
+    }
+  }
+
+  private func restoreLocked(_ id: String, target: RestoreTarget, confirmed: Bool, reply: @escaping Reply) {
+    readLocked()
+    guard let interface = supportedInterfaceLocked(id, reply: reply) else { return }
+    let key = interface.deviceKey
+
+    let address: MACAddress
+    let kind: OperationKind
+    let source: HistorySource?
+    let policy: InterfacePolicy
+    switch target {
+    case .systemManaged:
+      // Handoff only stops MACDancer from writing; the address is left as is.
+      guard !interface.isBusy else { return reply(.failure(.interfaceBusy(id))) }
+      document.policies[key] = .systemManaged
+      document.pendingRotations[key] = nil
+      notices[key] = nil
+      let now = env.now()
+      lastOperations[key] = OperationRecord(
+        kind: .handoff, state: .succeeded, requested: nil, observed: interface.currentMAC,
+        startedAt: now, finishedAt: now
+      )
+      return commitLocked(reply: reply)
+    case .hardware:
+      guard let hardware = interface.hardwareMAC, hardware.isAssignable else {
+        return reply(.failure(.hardwareAddressUnavailable))
+      }
+      (address, kind, source, policy) = (hardware, .restoreHardware, nil, .systemManaged)
+    case let .history(entry):
+      guard interface.history.contains(entry) else { return reply(.failure(.historyEntryMissing(entry))) }
+      (address, kind, source, policy) = (entry, .restoreHistory, .historyRestore, .specified(entry))
+    case let .specified(entry, confirmedGlobal):
+      guard entry.isAssignable else { return reply(.failure(.invalidRequest("\(entry) is not assignable."))) }
+      if !entry.isLocallyAdministered && !confirmedGlobal && entry != interface.hardwareMAC {
+        return reply(.failure(.globalAddressNeedsConfirmation))
+      }
+      (address, kind, source, policy) = (entry, .restoreSpecified, .userSpecified, .specified(entry))
+    }
+
+    guard !env.legacyServiceDetected() else { return reply(.failure(.legacyServiceConflict)) }
+    if address != interface.hardwareMAC,
+       observed.values.contains(where: { $0.id != id && $0.kind.isSupported && $0.currentMAC == address }) {
+      return reply(.failure(.addressInUse(address)))
+    }
+
+    if address == interface.currentMAC {
+      // Already in place: record the choice without touching the link.
+      guard !interface.isBusy else { return reply(.failure(.interfaceBusy(id))) }
+      document.policies[key] = policy
+      if let source { recordHistoryLocked(address, source: source, kind: kind, interface: interface) }
+      let now = env.now()
+      lastOperations[key] = OperationRecord(
+        kind: kind, state: .succeeded, requested: address, observed: address, startedAt: now, finishedAt: now
+      )
+      return commitLocked(reply: reply)
+    }
+
+    if case let .denied(error) = SafetyPolicy.manual(interface, confirmedDisruption: confirmed) {
+      return reply(.failure(error))
+    }
+    startWriteLocked(
+      interface, target: address, kind: kind, source: source,
+      resultingPolicy: policy, disconnectWiFi: confirmed, reply: reply
+    )
+  }
+
+  // MARK: - Writing
+
+  private func startWriteLocked(
+    _ interface: InterfaceSnapshot,
+    target: MACAddress,
+    kind: OperationKind,
+    source: HistorySource?,
+    resultingPolicy: InterfacePolicy,
+    disconnectWiFi: Bool,
+    reply: Reply?
+  ) {
+    let id = interface.id
+    let key = interface.deviceKey
+    busy.insert(id)
+    notices[key] = nil
+    lastOperations[key] = OperationRecord(
+      kind: kind, state: .running, requested: target, observed: interface.currentMAC, startedAt: env.now()
+    )
+    Log.daemon.info("\(kind.rawValue, privacy: .public) on \(id, privacy: .public) started")
+    publishLocked()
+
+    let writer = env.writer
+    env.workQueue.async {
+      let outcome = writer.write(target, to: interface, disconnectWiFi: disconnectWiFi)
+      self.queue.async {
+        self.finishWriteLocked(
+          interface, target: target, kind: kind, source: source,
+          resultingPolicy: resultingPolicy, outcome: outcome, reply: reply
+        )
+      }
+    }
+  }
+
+  private func finishWriteLocked(
+    _ interface: InterfaceSnapshot,
+    target: MACAddress,
+    kind: OperationKind,
+    source: HistorySource?,
+    resultingPolicy: InterfacePolicy,
+    outcome: MACWriteOutcome,
+    reply: Reply?
+  ) {
+    let id = interface.id
+    let key = interface.deviceKey
+    busy.remove(id)
+    lastWriteAt[id] = env.now()
+    readLocked()
+
+    var record = lastOperations[key] ?? OperationRecord(
+      kind: kind, state: .running, requested: target, observed: nil, startedAt: env.now()
+    )
+    record.state = outcome.succeeded ? .succeeded : .failed
+    record.observed = outcome.observed ?? observed[id]?.currentMAC
+    record.finishedAt = env.now()
+    record.error = outcome.error
+    record.disconnectedWiFi = outcome.disconnectedWiFi
+    lastOperations[key] = record
+
+    if outcome.succeeded {
+      document.policies[key] = resultingPolicy
+      document.pendingRotations[key] = nil
+      if let source { recordHistoryLocked(target, source: source, kind: kind, interface: interface) }
+      if outcome.disconnectedWiFi { scheduleWiFiFollowUpLocked(id: id, key: key, applied: target) }
+      Log.daemon.info("\(kind.rawValue, privacy: .public) on \(id, privacy: .public) verified")
+    } else {
+      // An automatic rotation is not retried in a loop; the next trigger queues it again.
+      if kind == .automaticRotation { document.pendingRotations[key] = nil }
+      Log.daemon.error(
+        "\(kind.rawValue, privacy: .public) on \(id, privacy: .public) failed: \(outcome.error?.message ?? "", privacy: .public)"
+      )
+    }
+
+    persistLocked()
+    publishLocked()
+    if let error = outcome.error {
+      reply?(.failure(error))
+    } else {
+      reply?(.success(snapshotLocked()))
+    }
+  }
+
+  /// Hardware addresses are never stored; they are always available anyway.
+  private func recordHistoryLocked(
+    _ address: MACAddress, source: HistorySource, kind: OperationKind, interface: InterfaceSnapshot
+  ) {
+    guard address != interface.hardwareMAC else { return }
+    var ledger = document.histories[interface.deviceKey] ?? HistoryLedger()
+    let now = env.now()
+    ledger.record(HistoryEntry(address: address, source: source, firstUsedAt: now, lastUsedAt: now, operation: kind))
+    document.histories[interface.deviceKey] = ledger
+  }
+
+  /// macOS rejoins Wi-Fi by itself after the disconnect. If Private Wi-Fi
+  /// Address is on for that network it swaps our address for its own; tell
+  /// the user instead of leaving them guessing.
+  private func scheduleWiFiFollowUpLocked(id: String, key: String, applied: MACAddress) {
+    queue.asyncAfter(deadline: .now() + env.wifiFollowUpDelay) {
+      self.readLocked()
+      guard !self.busy.contains(id),
+            let current = self.observed[id], current.deviceKey == key,
+            self.lastOperations[key]?.requested == applied,
+            let address = current.currentMAC, address != applied else { return }
+      self.notices[key] = .addressReplacedAfterReconnect(applied: applied, current: address)
+      Log.daemon.notice("macOS replaced the MAC on \(id, privacy: .public) after reconnecting")
       self.publishLocked()
     }
   }
 
-  func handleSystemEvent(_ event: SystemEventMonitor.Event) {
-    queue.async {
-      switch event {
-      case .pendingSleepRotation:
-        let interfaceIDs = AutomationPlanner.interfaceIDsToQueue(
-          for: .beforeSleep,
-          settings: self.configuration.automation,
-          current: self.interfacesByID
-        )
-        for interfaceID in interfaceIDs {
-          self.markAutomaticOperationPendingLocked(
-            interfaceID: interfaceID,
-            message: "Rotation was queued before sleep."
-          )
-        }
-        if !interfaceIDs.isEmpty { self.persistAndPublishLocked() }
-      case let .reconcile(reason):
-        let previousInterfaces = self.interfacesByID
-        self.reconcileLocked(reason: String(describing: reason))
-
-        let trigger: AutomationTrigger?
-        switch reason {
-        case .wake: trigger = .afterWake
-        case .networkChange: trigger = .networkChange
-        case .initial, .storeRestart: trigger = nil
-        }
-        if let trigger {
-          let interfaceIDs = AutomationPlanner.interfaceIDsToQueue(
-            for: trigger,
-            settings: self.configuration.automation,
-            previous: previousInterfaces,
-            current: self.interfacesByID
-          )
-          let message = trigger == .afterWake
-            ? "Rotation was queued after wake."
-            : "Rotation was queued when the interface became inactive."
-          var queuedStateChanged = false
-          for interfaceID in interfaceIDs {
-            queuedStateChanged = self.markAutomaticOperationPendingLocked(
-              interfaceID: interfaceID,
-              message: message
-            ) || queuedStateChanged
-          }
-          if queuedStateChanged { self.persistAndPublishLocked() }
-        }
-        self.executeSafePendingAutomaticOperationsLocked()
-      }
+  private func generateLocked(for interface: InterfaceSnapshot) throws -> (MACAddress, HistorySource) {
+    let inUse = observed.values.flatMap { [$0.currentMAC, $0.hardwareMAC] }.compactMap { $0 }
+    let excluded = Set(inUse).union(interface.history.addresses)
+    if document.automation.vendorCompatibility {
+      guard let oui = interface.hardwareMAC?.vendorOUI else { throw MACDancerError.hardwareAddressUnavailable }
+      return (try MACAddress.randomWithVendor(oui, excluding: excluded, random: env.random), .vendorCompatible)
     }
+    return (try MACAddress.randomLocal(excluding: excluded, random: env.random), .generatedLocal)
   }
 
-  func setPolicy(_ envelope: OperationEnvelope<PolicyRequest>, completion: @escaping (Result<OperationResult, Error>) -> Void) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault))); return
-      }
-      if let prior = self.completedOperations[envelope.operationID] { completion(.success(prior)); return }
-      guard self.interfacesByID[envelope.request.interfaceID] != nil else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID))); return
-      }
-      if let interface = self.interfacesByID[envelope.request.interfaceID] {
-        switch envelope.request.policy {
-        case .systemManaged:
-          break
-        case .random:
-          guard interface.kind != .other else {
-            completion(.failure(MACDancerError.commandFailed("This interface type is not supported.")))
-            return
-          }
-        case .specified:
-          completion(.failure(MACDancerError.invalidPayload(
-            "A specified policy is installed only after a successful, read-back-verified restore request."
-          )))
-          return
-        }
-      }
-      if envelope.request.policy != .systemManaged, self.legacyServiceDetectedLocked() {
-        completion(.failure(self.legacyConflictError)); return
-      }
-      guard let interface = self.interfacesByID[envelope.request.interfaceID] else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID))); return
-      }
-      self.configuration.policies[self.configurationKey(for: interface)] = envelope.request.policy
-      self.interfacesByID[envelope.request.interfaceID]?.policy = envelope.request.policy
-      if envelope.request.policy == .systemManaged {
-        self.clearAutomaticOperationLocked(interfaceID: envelope.request.interfaceID)
-      }
-      let now = Date()
-      let result = OperationResult(
-        id: envelope.operationID,
-        interfaceID: envelope.request.interfaceID,
-        kind: .reconcile,
-        state: .succeeded,
-        requestedAddress: nil,
-        observedAddress: self.interfacesByID[envelope.request.interfaceID]?.currentMAC,
-        startedAt: now,
-        completedAt: now,
-        message: "Policy saved."
+  // MARK: - Automation
+
+  private func handleLocked(_ event: SystemEvent) {
+    let previous = observed.mapValues(managedLocked)
+    readLocked()
+    let current = observed.mapValues(managedLocked)
+
+    switch event {
+    case .willSleep:
+      // Only record intent. Nothing is written while the Mac goes to sleep.
+      queueRotationsLocked(
+        AutomationPlanner.interfacesToQueue(for: .beforeSleep, settings: document.automation, current: current),
+        trigger: .beforeSleep
       )
-      self.finishLocked(result, completion: completion)
-    }
-  }
-
-  func randomize(_ envelope: OperationEnvelope<RandomizeRequest>, completion: @escaping (Result<OperationResult, Error>) -> Void) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault))); return
-      }
-      if let prior = self.completedOperations[envelope.operationID] { completion(.success(prior)); return }
-      guard !self.legacyServiceDetectedLocked() else {
-        completion(.failure(self.legacyConflictError)); return
-      }
-      do {
-        try self.refreshObservedInterfacesLocked()
-        self.lastError = nil
-        self.publishLocked()
-      } catch {
-        self.lastError = "Manual randomization preflight failed: \(error.localizedDescription)"
-        self.publishLocked()
-        completion(.failure(error))
-        return
-      }
-      guard let interface = self.interfacesByID[envelope.request.interfaceID] else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID))); return
-      }
-      do {
-        try self.validateManualSafetyLocked(
-          interface: interface,
-          confirmedDisruption: envelope.request.confirmedDisruption
-        )
-      } catch {
-        completion(.failure(error))
-        return
-      }
-      let excluded = Set(self.interfacesByID.values.flatMap { [$0.currentMAC, $0.hardwareMAC] }.compactMap { $0 })
-        .union(interface.history.entries.map(\.address))
-      do {
-        let address: MACAddress
-        let source: HistorySource
-        if self.configuration.automation.vendorCompatibility {
-          guard let oui = self.compatibilityOUI(for: interface) else {
-            completion(.failure(MACDancerError.invalidMACAddress(
-              "A globally administered hardware OUI is unavailable for this interface."
-            )))
-            return
-          }
-          if let requestedOUI = envelope.request.vendorOUI, requestedOUI != oui {
-            completion(.failure(MACDancerError.invalidMACAddress(
-              "Vendor compatibility can only use this interface's verified hardware OUI."
-            )))
-            return
-          }
-          address = try MACAddress.randomVendorCompatible(oui: oui, excluding: excluded)
-          source = .vendorCompatible
-        } else {
-          address = try MACAddress.randomLocallyAdministered(excluding: excluded)
-          source = .generatedLocal
-        }
-        self.applyLocked(
-          operationID: envelope.operationID,
-          interface: interface,
-          target: address,
-          kind: .randomize,
-          historySource: source,
-          resultingPolicy: .random,
-          completion: completion
-        )
-      } catch { completion(.failure(error)) }
-    }
-  }
-
-  func restore(_ envelope: OperationEnvelope<RestoreRequest>, completion: @escaping (Result<OperationResult, Error>) -> Void) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault))); return
-      }
-      if let prior = self.completedOperations[envelope.operationID] { completion(.success(prior)); return }
-      guard let interface = self.interfacesByID[envelope.request.interfaceID] else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID))); return
-      }
-      guard interface.kind != .other else {
-        completion(.failure(MACDancerError.commandFailed("This interface type is not supported.")))
-        return
-      }
-
-      if envelope.request.kind == .systemManaged {
-        self.configuration.policies[self.configurationKey(for: interface)] = .systemManaged
-        self.interfacesByID[interface.id]?.policy = .systemManaged
-        self.clearAutomaticOperationLocked(interfaceID: interface.id)
-        let now = Date()
-        let result = OperationResult(
-          id: envelope.operationID,
-          interfaceID: interface.id,
-          kind: .handoff,
-          state: .succeeded,
-          requestedAddress: nil,
-          observedAddress: interface.currentMAC,
-          startedAt: now,
-          completedAt: now,
-          message: "MACDancer stopped writing to this interface. Choose Private Wi-Fi Address in System Settings."
-        )
-        self.finishLocked(result, completion: completion)
-        return
-      }
-
-      guard !self.legacyServiceDetectedLocked() else {
-        completion(.failure(self.legacyConflictError)); return
-      }
-
-      do {
-        try self.refreshObservedInterfacesLocked()
-        self.lastError = nil
-        self.publishLocked()
-      } catch {
-        self.lastError = "Restore preflight failed: \(error.localizedDescription)"
-        self.publishLocked()
-        completion(.failure(error))
-        return
-      }
-
-      guard let interface = self.interfacesByID[envelope.request.interfaceID] else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID))); return
-      }
-
-      let target: MACAddress?
-      let operationKind: OperationKind
-      let source: HistorySource?
-      switch envelope.request.kind {
-      case .hardware:
-        target = interface.hardwareMAC
-        operationKind = .restoreHardware
-        source = nil
-      case .history:
-        target = envelope.request.targetAddress.flatMap { requested in
-          interface.history.entries.contains(where: { $0.address == requested }) ? requested : nil
-        }
-        operationKind = .restoreHistory
-        source = .historyRestore
-      case .specified:
-        target = envelope.request.targetAddress
-        operationKind = .restoreSpecified
-        source = .userSpecified
-      case .systemManaged:
-        return
-      }
-      guard let target, target.isValidAssignable else {
-        completion(.failure(MACDancerError.invalidMACAddress(envelope.request.targetAddress?.stringValue ?? "missing"))); return
-      }
-      if envelope.request.kind == .specified,
-         !target.isLocallyAdministered,
-         !envelope.request.confirmedGlobalAddressRisk {
-        completion(.failure(MACDancerError.invalidPayload(
-          "A globally administered specified address requires an explicit second confirmation."
-        )))
-        return
-      }
-      if target != interface.currentMAC {
-        do {
-          try self.validateManualSafetyLocked(
-            interface: interface,
-            confirmedDisruption: envelope.request.confirmedDisruption
-          )
-        } catch {
-          completion(.failure(error))
-          return
-        }
-      }
-      if self.interfacesByID.values.contains(where: {
-        $0.id != interface.id && ($0.currentMAC == target || $0.hardwareMAC == target)
-      }) {
-        completion(.failure(MACDancerError.invalidMACAddress("The address is already used by another interface."))); return
-      }
-      self.applyLocked(
-        operationID: envelope.operationID,
-        interface: interface,
-        target: target,
-        kind: operationKind,
-        historySource: source,
-        resultingPolicy: operationKind == .restoreHardware ? .systemManaged : .specified(target),
-        completion: completion
+    case .didWake:
+      queueRotationsLocked(
+        AutomationPlanner.interfacesToQueue(for: .afterWake, settings: document.automation, current: current),
+        trigger: .afterWake
       )
+      queue.asyncAfter(deadline: .now() + env.wakeSettleDelay) { self.tick() }
+    case .networkChanged:
+      // Our own writes bounce the link; those transitions are not "the user
+      // stopped using this interface".
+      let now = env.now()
+      let candidates = AutomationPlanner.interfacesToQueue(
+        for: .becameInactive, settings: document.automation, previous: previous, current: current
+      ).filter { id in lastWriteAt[id].map { now.timeIntervalSince($0) > 30 } ?? true }
+      queueRotationsLocked(candidates, trigger: .becameInactive)
+      runPendingLocked()
     }
-  }
-
-  func cancel(_ envelope: OperationEnvelope<CancelRequest>, completion: @escaping (Result<DaemonSnapshot, Error>) -> Void) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault))); return
-      }
-      if let interfaceID = envelope.request.interfaceID { self.pendingAutomaticInterfaces.remove(interfaceID) }
-      else { self.pendingAutomaticInterfaces.removeAll() }
-      self.configuration.pendingOperations.removeAll { operation in
-        envelope.request.interfaceID == nil || operation.interfaceID == envelope.request.interfaceID
-      }
-      self.persistAndPublishLocked()
-      completion(.success(self.snapshotLocked()))
-    }
-  }
-
-  func updateHistory(
-    _ envelope: OperationEnvelope<HistoryMutationRequest>,
-    completion: @escaping (Result<DaemonSnapshot, Error>) -> Void
-  ) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault)))
-        return
-      }
-      guard var interface = self.interfacesByID[envelope.request.interfaceID] else {
-        completion(.failure(MACDancerError.interfaceNotFound(envelope.request.interfaceID)))
-        return
-      }
-
-      let configurationKey = self.configurationKey(for: interface)
-      var ledger = self.configuration.histories[configurationKey] ?? interface.history
-      switch envelope.request.kind {
-      case .remove:
-        guard let address = envelope.request.address else {
-          completion(.failure(MACDancerError.invalidPayload("A history address is required.")))
-          return
-        }
-        ledger.remove(address: address)
-      case .clear:
-        ledger.removeAll()
-      }
-
-      self.configuration.histories[configurationKey] = ledger
-      interface.history = ledger
-      self.interfacesByID[interface.id] = interface
-      self.persistAndPublishLocked()
-      completion(.success(self.snapshotLocked()))
-    }
-  }
-
-  func updateAutomation(
-    _ envelope: OperationEnvelope<AutomationRequest>,
-    completion: @escaping (Result<DaemonSnapshot, Error>) -> Void
-  ) {
-    queue.async {
-      if let fault = self.persistentFault {
-        completion(.failure(MACDancerError.persistence(fault)))
-        return
-      }
-      let settings = envelope.request.settings
-      let enablesManagedBehavior = settings.rotateAfterWake
-        || settings.rotateWhenInterfaceBecomesInactive
-        || settings.prepareRotationBeforeSleep
-        || settings.vendorCompatibility
-      guard !enablesManagedBehavior || !self.legacyServiceDetectedLocked() else {
-        completion(.failure(self.legacyConflictError))
-        return
-      }
-
-      self.configuration.automation = settings
-      if !settings.rotateAfterWake,
-         !settings.rotateWhenInterfaceBecomesInactive,
-         !settings.prepareRotationBeforeSleep {
-        self.clearAllAutomaticOperationsLocked()
-      }
-      self.persistAndPublishLocked()
-      completion(.success(self.snapshotLocked()))
-    }
-  }
-
-  private func applyLocked(
-    operationID: UUID,
-    interface: InterfaceSnapshot,
-    target: MACAddress,
-    kind: OperationKind,
-    historySource: HistorySource?,
-    resultingPolicy: InterfacePolicy,
-    completion: @escaping (Result<OperationResult, Error>) -> Void
-  ) {
-    let startedAt = Date()
-    let performsLinkWrite = interface.currentMAC != target
-    // Refuse to touch a link unless the protected configuration path is
-    // writable now. This prevents a known persistence failure from leaving a
-    // changed MAC paired with an obsolete automatic policy after restart.
-    do {
-      try store.save(configuration)
-    } catch {
-      persistentFault = "Configuration preflight failed: \(error.localizedDescription)"
-      publishLocked()
-      completion(.failure(error))
-      return
-    }
-    // A target that already matches the freshly observed address is a verified
-    // no-op. Avoiding an unnecessary link-layer write also avoids needless
-    // interface down/up behavior on active adapters.
-    let outcome: MACSettingOutcome = !performsLinkWrite
-      ? .success(interfaceID: interface.id, requested: target, observed: target)
-      : setter.apply(interfaceID: interface.id, targetAddress: target)
-    let result: OperationResult
-    switch outcome {
-    case let .success(_, _, observed):
-      var updated = interface
-      updated.currentMAC = observed
-      updated.policy = resultingPolicy
-      // Hardware identities are never history candidates. A no-op specified
-      // request while macOS owns the interface is also omitted because public
-      // APIs cannot distinguish Apple's per-network private address from any
-      // other already-observed address.
-      if let historySource,
-         observed != updated.hardwareMAC,
-         performsLinkWrite || interface.policy != .systemManaged {
-        updated.history.record(HistoryEntry(
-          address: observed,
-          source: historySource,
-          firstUsedAt: startedAt,
-          lastUsedAt: Date(),
-          operation: kind
-        ))
-        configuration.histories[configurationKey(for: interface)] = updated.history
-      }
-      configuration.policies[configurationKey(for: interface)] = resultingPolicy
-      result = OperationResult(
-        id: operationID,
-        interfaceID: interface.id,
-        kind: kind,
-        state: .succeeded,
-        requestedAddress: target,
-        observedAddress: observed,
-        startedAt: startedAt,
-        completedAt: Date(),
-        message: nil
-      )
-      updated.lastOperation = result
-      interfacesByID[interface.id] = updated
-    case let .mismatch(_, requested, observed):
-      let associatedWiFiFailure = interface.kind == .wifi && interface.isWiFiAssociated
-      result = OperationResult(
-        id: operationID, interfaceID: interface.id, kind: kind, state: .failed,
-        requestedAddress: requested, observedAddress: observed, startedAt: startedAt,
-        completedAt: Date(),
-        message: associatedWiFiFailure
-          ? MACDancerError.associatedWiFiWriteRejected.localizedDescription
-          : "The address read back from macOS did not match the requested MAC address.",
-        failureReason: associatedWiFiFailure ? .associatedWiFiWriteRejected : nil
-      )
-      interfacesByID[interface.id]?.lastOperation = result
-    case let .failure(_, requested, reason):
-      let associatedWiFiFailure: Bool
-      if interface.kind == .wifi,
-         interface.isWiFiAssociated,
-         case .commandRejected = reason {
-        associatedWiFiFailure = true
-      } else {
-        associatedWiFiFailure = false
-      }
-      result = OperationResult(
-        id: operationID, interfaceID: interface.id, kind: kind, state: .failed,
-        requestedAddress: requested, observedAddress: interface.currentMAC, startedAt: startedAt,
-        completedAt: Date(),
-        message: associatedWiFiFailure
-          ? MACDancerError.associatedWiFiWriteRejected.localizedDescription
-          : reason.userFacingDescription,
-        failureReason: associatedWiFiFailure ? .associatedWiFiWriteRejected : nil
-      )
-      interfacesByID[interface.id]?.lastOperation = result
-    }
-    finishLocked(result, completion: completion)
-  }
-
-  private func finishLocked(
-    _ result: OperationResult,
-    completion: @escaping (Result<OperationResult, Error>) -> Void
-  ) {
-    completedOperations[result.id] = result
-    if completedOperations.count > 128 {
-      completedOperations.removeValue(forKey: completedOperations.keys.first!)
-    }
-    persistAndPublishLocked()
-    completion(.success(result))
-  }
-
-  private func reconcileLocked(reason: String) {
-    do {
-      try refreshObservedInterfacesLocked()
-      lastError = nil
-    } catch {
-      lastError = "Reconcile failed (\(reason)): \(error.localizedDescription)"
-    }
+    persistLocked()
     publishLocked()
   }
 
-  /// Refreshes all read-only interface facts without publishing. Callers use
-  /// this immediately before a manual write so safety decisions cannot rely
-  /// on a periodic snapshot that may be up to thirty seconds old.
-  private func refreshObservedInterfacesLocked() throws {
-    var observed = try interfaceProvider.interfaces()
-    for index in observed.indices {
-      let id = observed[index].id
-      let configurationKey = configurationKey(for: observed[index])
-      observed[index].policy = configuration.policies[configurationKey] ?? .systemManaged
-      observed[index].history = configuration.histories[configurationKey] ?? HistoryLedger()
-      observed[index].lastOperation = interfacesByID[id]?.lastOperation
+  private func queueRotationsLocked(_ ids: Set<String>, trigger: RotationTrigger) {
+    for id in ids.sorted() {
+      guard let key = observed[id]?.deviceKey, document.pendingRotations[key] == nil else { continue }
+      document.pendingRotations[key] = PendingRotation(trigger: trigger, queuedAt: env.now())
+      Log.daemon.info("Queued \(trigger.rawValue, privacy: .public) rotation for \(id, privacy: .public)")
     }
-    interfacesByID = Dictionary(uniqueKeysWithValues: observed.map { ($0.id, $0) })
   }
 
-  private func executeSafePendingAutomaticOperationsLocked() {
-    guard persistentFault == nil, !legacyServiceDetectedLocked() else { return }
-    let interfaceIDs = pendingAutomaticInterfaces.sorted()
-    var pendingStateChanged = false
-    for interfaceID in interfaceIDs {
-      guard let interface = interfacesByID[interfaceID] else {
-        pendingStateChanged = clearAutomaticOperationLocked(interfaceID: interfaceID) || pendingStateChanged
+  /// Starts at most one automatic write at a time; the rest wait for the next pass.
+  private func runPendingLocked() {
+    guard !document.pendingRotations.isEmpty, !env.legacyServiceDetected() else { return }
+    let byKey = Dictionary(observed.values.map { ($0.deviceKey, $0) }, uniquingKeysWith: { first, _ in first })
+    for key in document.pendingRotations.keys.sorted() {
+      guard document.policies[key] == .random else {
+        document.pendingRotations[key] = nil
         continue
       }
-      guard interface.policy == .random else {
-        pendingStateChanged = clearAutomaticOperationLocked(interfaceID: interfaceID) || pendingStateChanged
+      guard let raw = byKey[key] else {
+        document.pendingRotations[key]?.waitingReason = .interfaceMissing
         continue
       }
-      let decision = SafetyPolicy.decision(
-        for: interface,
-        automatic: true,
-        confirmedDisruption: false
-      )
-      guard case .allowed = decision else {
-        if case let .deferred(reason) = decision {
-          pendingStateChanged = markAutomaticOperationDeferredLocked(
-            interfaceID: interfaceID,
-            message: reason
-          ) || pendingStateChanged
-        } else if case let .denied(reason) = decision {
-          pendingStateChanged = clearAutomaticOperationLocked(interfaceID: interfaceID) || pendingStateChanged
-          interfacesByID[interfaceID]?.errorMessage = "Automatic rotation was cancelled: \(reason)"
+      let interface = managedLocked(raw)
+      switch SafetyPolicy.automatic(interface) {
+      case let .wait(reason):
+        document.pendingRotations[key]?.waitingReason = reason
+      case .denied:
+        document.pendingRotations[key] = nil
+      case .allowed:
+        guard busy.isEmpty else {
+          document.pendingRotations[key]?.waitingReason = .busy
+          continue
         }
-        continue
-      }
-
-      let excluded = Set(interfacesByID.values.flatMap { [$0.currentMAC, $0.hardwareMAC] }.compactMap { $0 })
-        .union(interface.history.entries.map(\.address))
-      do {
-        let target: MACAddress
-        let source: HistorySource
-        if configuration.automation.vendorCompatibility {
-          guard let oui = compatibilityOUI(for: interface) else {
-            throw MACDancerError.invalidMACAddress(
-              "A globally administered hardware OUI is unavailable for \(interface.id)."
-            )
-          }
-          target = try MACAddress.randomVendorCompatible(oui: oui, excluding: excluded)
-          source = .vendorCompatible
-        } else {
-          target = try MACAddress.randomLocallyAdministered(excluding: excluded)
-          source = .generatedLocal
+        do {
+          let (target, source) = try generateLocked(for: interface)
+          startWriteLocked(
+            interface, target: target, kind: .automaticRotation, source: source,
+            resultingPolicy: .random, disconnectWiFi: false, reply: nil
+          )
+        } catch {
+          document.pendingRotations[key] = nil
+          Log.daemon.error("Automatic rotation on \(interface.id, privacy: .public) could not start: \(MACDancerError(error).message, privacy: .public)")
         }
-        let operationID = configuration.pendingOperations
-          .first(where: { $0.interfaceID == interfaceID })?.id ?? UUID()
-        applyLocked(
-          operationID: operationID,
-          interface: interface,
-          target: target,
-          kind: .randomize,
-          historySource: source,
-          resultingPolicy: .random
-        ) { _ in }
-        if interfacesByID[interfaceID]?.lastOperation?.state == .succeeded {
-          pendingStateChanged = clearAutomaticOperationLocked(interfaceID: interfaceID) || pendingStateChanged
-        } else {
-          pendingStateChanged = markAutomaticOperationDeferredLocked(
-            interfaceID: interfaceID,
-            message: "The requested address was not verified; the operation remains pending."
-          ) || pendingStateChanged
-        }
-      } catch {
-        pendingStateChanged = markAutomaticOperationDeferredLocked(
-          interfaceID: interfaceID,
-          message: error.localizedDescription
-        ) || pendingStateChanged
       }
     }
-    if pendingStateChanged { persistAndPublishLocked() }
+  }
+
+  // MARK: - State
+
+  private func readLocked() {
+    do {
+      let interfaces = try env.reader.interfaces()
+      observed = Dictionary(interfaces.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+      warnings["read"] = nil
+    } catch {
+      warnings["read"] = "Reading interfaces failed: \(MACDancerError(error).message)"
+    }
+  }
+
+  /// Adds what MACDancer manages to the raw facts read from macOS.
+  private func managedLocked(_ raw: InterfaceSnapshot) -> InterfaceSnapshot {
+    var interface = raw
+    let key = raw.deviceKey
+    interface.policy = document.policies[key] ?? .systemManaged
+    interface.history = document.histories[key] ?? HistoryLedger()
+    interface.lastOperation = lastOperations[key]
+    interface.pendingRotation = document.pendingRotations[key]
+    interface.isBusy = busy.contains(raw.id)
+    interface.notice = notices[key]
+    return interface
+  }
+
+  private func supportedInterfaceLocked(_ id: String, reply: Reply) -> InterfaceSnapshot? {
+    guard let raw = observed[id] else {
+      reply(.failure(.interfaceNotFound(id)))
+      return nil
+    }
+    guard raw.kind.isSupported else {
+      reply(.failure(.unsupportedInterface(id)))
+      return nil
+    }
+    return managedLocked(raw)
+  }
+
+  private func commitLocked(reply: Reply) {
+    persistLocked()
+    publishLocked()
+    reply(.success(snapshotLocked()))
+  }
+
+  /// Writes only when something changed. A failed save is reported but never
+  /// blocks the next action; it is retried on the next change or tick.
+  private func persistLocked() {
+    guard document != savedDocument else { return }
+    do {
+      try env.store.save(document)
+      savedDocument = document
+      warnings["save"] = nil
+    } catch {
+      let message = MACDancerError(error).message
+      if warnings["save"] != message { Log.daemon.error("\(message, privacy: .public)") }
+      warnings["save"] = message
+    }
   }
 
   private func snapshotLocked() -> DaemonSnapshot {
     DaemonSnapshot(
-      revision: revision,
       instanceID: instanceID,
-      heartbeat: Date(),
-      interfaces: interfacesByID.values.sorted { $0.bsdName < $1.bsdName },
-      pendingOperationIDs: configuration.pendingOperations.map(\.id),
-      automation: configuration.automation,
-      lastError: persistentFault ?? lastError
+      revision: revision,
+      generatedAt: env.now(),
+      interfaces: observed.values.map(managedLocked).sorted { $0.bsdName < $1.bsdName },
+      automation: document.automation,
+      legacyServiceDetected: env.legacyServiceDetected(),
+      warnings: warnings.keys.sorted().compactMap { warnings[$0] },
+      daemonVersion: env.version
     )
   }
 
-  private func compatibilityOUI(for interface: InterfaceSnapshot) -> [UInt8]? {
-    guard let hardware = interface.hardwareMAC,
-          hardware.bytes.count == 6,
-          hardware.bytes[0] & 0x03 == 0 else { return nil }
-    return Array(hardware.bytes.prefix(3))
-  }
-
-  /// BSD names can be reused when USB/Thunderbolt adapters are replaced. A
-  /// hardware-qualified key prevents a newly attached device from inheriting
-  /// another adapter's automatic policy or history.
-  private func configurationKey(for interface: InterfaceSnapshot) -> String {
-    "\(interface.bsdName)|\(interface.hardwareMAC?.stringValue ?? "unverified-hardware")"
-  }
-
-  private func validateManualSafetyLocked(
-    interface: InterfaceSnapshot,
-    confirmedDisruption: Bool
-  ) throws {
-    switch SafetyPolicy.decision(
-      for: interface,
-      automatic: false,
-      confirmedDisruption: confirmedDisruption
-    ) {
-    case .allowed:
-      return
-    case let .denied(reason):
-      if (interface.isActive || interface.isDefaultRoute) && !confirmedDisruption {
-        throw MACDancerError.disruptionConfirmationRequired
-      }
-      throw MACDancerError.commandFailed(reason)
-    case let .deferred(reason):
-      throw MACDancerError.commandFailed(reason)
-    }
-  }
-
-  @discardableResult
-  private func markAutomaticOperationPendingLocked(interfaceID: String, message: String) -> Bool {
-    pendingAutomaticInterfaces.insert(interfaceID)
-    guard !configuration.pendingOperations.contains(where: { $0.interfaceID == interfaceID }) else {
-      return false
-    }
-    let now = Date()
-    configuration.pendingOperations.append(OperationResult(
-      id: UUID(),
-      interfaceID: interfaceID,
-      kind: .randomize,
-      state: .pending,
-      requestedAddress: nil,
-      observedAddress: interfacesByID[interfaceID]?.currentMAC,
-      startedAt: now,
-      completedAt: nil,
-      message: message,
-      deviceKey: interfacesByID[interfaceID].map(configurationKey(for:))
-    ))
-    return true
-  }
-
-  @discardableResult
-  private func markAutomaticOperationDeferredLocked(interfaceID: String, message: String) -> Bool {
-    pendingAutomaticInterfaces.insert(interfaceID)
-    if let index = configuration.pendingOperations.firstIndex(where: { $0.interfaceID == interfaceID }) {
-      let current = configuration.pendingOperations[index]
-      let observed = interfacesByID[interfaceID]?.currentMAC
-      guard current.state != .deferred
-        || current.message != message
-        || current.observedAddress != observed else { return false }
-      configuration.pendingOperations[index] = OperationResult(
-        id: current.id,
-        interfaceID: interfaceID,
-        kind: current.kind,
-        state: .deferred,
-        requestedAddress: current.requestedAddress,
-        observedAddress: observed,
-        startedAt: current.startedAt,
-        completedAt: nil,
-        message: message,
-        deviceKey: current.deviceKey
-      )
-      return true
-    } else {
-      let now = Date()
-      configuration.pendingOperations.append(OperationResult(
-        id: UUID(),
-        interfaceID: interfaceID,
-        kind: .randomize,
-        state: .deferred,
-        requestedAddress: nil,
-        observedAddress: interfacesByID[interfaceID]?.currentMAC,
-        startedAt: now,
-        completedAt: nil,
-        message: message,
-        deviceKey: interfacesByID[interfaceID].map(configurationKey(for:))
-      ))
-      return true
-    }
-  }
-
-  @discardableResult
-  private func clearAutomaticOperationLocked(interfaceID: String) -> Bool {
-    let removedFromSet = pendingAutomaticInterfaces.remove(interfaceID) != nil
-    let previousCount = configuration.pendingOperations.count
-    configuration.pendingOperations.removeAll { $0.interfaceID == interfaceID }
-    return removedFromSet || configuration.pendingOperations.count != previousCount
-  }
-
-  private func clearAllAutomaticOperationsLocked() {
-    pendingAutomaticInterfaces.removeAll()
-    configuration.pendingOperations.removeAll()
-  }
-
-  private var legacyConflictError: MACDancerError {
-    .unsafeAutomaticOperation(
-      "LinkLiar's legacy daemon is installed. MACDancer will remain read-only until the competing service is removed or disabled."
-    )
-  }
-
-  private func legacyServiceDetectedLocked() -> Bool {
-    LegacyServiceDetector.isInstalledOrActive()
-  }
-
-  private func persistAndPublishLocked() {
-    do { try store.save(configuration) }
-    catch { persistentFault = "Configuration save failed: \(error.localizedDescription)" }
-    publishLocked()
-  }
-
+  /// Pushes a snapshot to subscribers only when its content changed, so the
+  /// periodic tick does not wake the GUI for nothing.
   private func publishLocked() {
+    var content = snapshotLocked()
+    content.revision = 0
+    content.generatedAt = .distantPast
+    content.interfaces = content.interfaces.map { interface in
+      var interface = interface
+      interface.observedAt = .distantPast
+      return interface
+    }
+    guard content != lastPublishedContent else { return }
+    lastPublishedContent = content
     revision &+= 1
     let snapshot = snapshotLocked()
     for subscriber in subscribers.values { subscriber(snapshot) }

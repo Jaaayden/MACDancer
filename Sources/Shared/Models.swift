@@ -1,10 +1,18 @@
 import Foundation
 
-enum InterfaceKind: String, Codable, Sendable { case wifi, ethernet, other }
+enum InterfaceKind: String, Codable, Sendable {
+  case wifi, ethernet, other
 
+  var isSupported: Bool { self != .other }
+}
+
+/// What MACDancer is responsible for on one interface.
 enum InterfacePolicy: Codable, Equatable, Sendable {
+  /// MACDancer never writes to the interface (the default).
   case systemManaged
+  /// Automation may rotate the address when it is safe to do so.
   case random
+  /// The user chose this exact address; automation leaves it alone.
   case specified(MACAddress)
 
   private enum CodingKeys: String, CodingKey { case kind, address }
@@ -31,10 +39,14 @@ enum InterfacePolicy: Codable, Equatable, Sendable {
   }
 }
 
-enum HistorySource: String, Codable, Sendable { case generatedLocal, vendorCompatible, userSpecified, historyRestore }
-enum OperationKind: String, Codable, Sendable { case randomize, restoreHardware, restoreHistory, restoreSpecified, handoff, reconcile }
-enum OperationState: String, Codable, Sendable { case pending, running, succeeded, deferred, cancelled, failed }
-enum OperationFailureReason: String, Codable, Sendable { case associatedWiFiWriteRejected }
+enum HistorySource: String, Codable, Sendable {
+  case generatedLocal, vendorCompatible, userSpecified, historyRestore
+}
+
+/// Raw values are part of the stored configuration; do not rename them.
+enum OperationKind: String, Codable, Sendable {
+  case randomize, restoreHardware, restoreHistory, restoreSpecified, handoff, reconcile, automaticRotation
+}
 
 struct HistoryEntry: Codable, Identifiable, Equatable, Sendable {
   var id: String { address.stringValue }
@@ -45,6 +57,7 @@ struct HistoryEntry: Codable, Identifiable, Equatable, Sendable {
   var operation: OperationKind
 }
 
+/// The most recent verified addresses of one interface, newest first, capped at 20.
 struct HistoryLedger: Codable, Equatable, Sendable {
   static let limit = 20
   private(set) var entries: [HistoryEntry] = []
@@ -54,8 +67,7 @@ struct HistoryLedger: Codable, Equatable, Sendable {
   }
 
   init(from decoder: Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(entries: try container.decode([HistoryEntry].self))
+    self.init(entries: try decoder.singleValueContainer().decode([HistoryEntry].self))
   }
 
   func encode(to encoder: Encoder) throws {
@@ -63,205 +75,65 @@ struct HistoryLedger: Codable, Equatable, Sendable {
     try container.encode(entries)
   }
 
+  var addresses: Set<MACAddress> { Set(entries.map(\.address)) }
+
+  func contains(_ address: MACAddress) -> Bool { entries.contains { $0.address == address } }
+
   mutating func record(_ entry: HistoryEntry) {
+    var entry = entry
     if let index = entries.firstIndex(where: { $0.address == entry.address }) {
-      let first = entries[index].firstUsedAt
+      entry.firstUsedAt = min(entries[index].firstUsedAt, entry.firstUsedAt)
       entries.remove(at: index)
-      var updated = entry
-      updated.firstUsedAt = min(first, entry.firstUsedAt)
-      entries.append(updated)
-    } else {
-      entries.append(entry)
     }
+    entries.append(entry)
     entries.sort { $0.lastUsedAt > $1.lastUsedAt }
     if entries.count > Self.limit { entries.removeLast(entries.count - Self.limit) }
   }
 
-  mutating func remove(address: MACAddress) { entries.removeAll { $0.address == address } }
+  mutating func remove(_ address: MACAddress) { entries.removeAll { $0.address == address } }
   mutating func removeAll() { entries.removeAll() }
 }
 
-struct InterfaceSnapshot: Codable, Identifiable, Equatable, Sendable {
-  var id: String { bsdName }
-  let bsdName: String
-  var displayName: String
-  var kind: InterfaceKind
-  var currentMAC: MACAddress?
-  var hardwareMAC: MACAddress?
-  var isActive: Bool
-  var isWiFiAssociated: Bool
-  var isDefaultRoute: Bool
-  var policy: InterfacePolicy
-  var history: HistoryLedger
-  var lastOperation: OperationResult?
-  var errorMessage: String?
-}
+enum OperationState: String, Codable, Sendable { case running, succeeded, failed }
 
-struct OperationResult: Codable, Identifiable, Equatable, Sendable {
-  let id: UUID
-  let interfaceID: String
+/// The latest MAC operation on an interface, as verified by the daemon.
+struct OperationRecord: Codable, Equatable, Sendable {
   let kind: OperationKind
-  let state: OperationState
-  let requestedAddress: MACAddress?
-  let observedAddress: MACAddress?
+  var state: OperationState
+  let requested: MACAddress?
+  var observed: MACAddress?
   let startedAt: Date
-  let completedAt: Date?
-  let message: String?
-  let failureReason: OperationFailureReason?
-  var deviceKey: String? = nil
-
-  private enum CodingKeys: String, CodingKey {
-    case id, interfaceID, kind, state, requestedAddress, observedAddress
-    case startedAt, completedAt, message, failureReason, deviceKey
-  }
-
-  init(
-    id: UUID,
-    interfaceID: String,
-    kind: OperationKind,
-    state: OperationState,
-    requestedAddress: MACAddress?,
-    observedAddress: MACAddress?,
-    startedAt: Date,
-    completedAt: Date?,
-    message: String?,
-    failureReason: OperationFailureReason? = nil,
-    deviceKey: String? = nil
-  ) {
-    self.id = id
-    self.interfaceID = interfaceID
-    self.kind = kind
-    self.state = state
-    self.requestedAddress = requestedAddress
-    self.observedAddress = observedAddress
-    self.startedAt = startedAt
-    self.completedAt = completedAt
-    self.message = message
-    self.failureReason = failureReason
-    self.deviceKey = deviceKey
-  }
-
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(UUID.self, forKey: .id)
-    interfaceID = try container.decode(String.self, forKey: .interfaceID)
-    kind = try container.decode(OperationKind.self, forKey: .kind)
-    state = try container.decode(OperationState.self, forKey: .state)
-    requestedAddress = try container.decodeIfPresent(MACAddress.self, forKey: .requestedAddress)
-    observedAddress = try container.decodeIfPresent(MACAddress.self, forKey: .observedAddress)
-    startedAt = try container.decode(Date.self, forKey: .startedAt)
-    completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
-    message = try container.decodeIfPresent(String.self, forKey: .message)
-    failureReason = try container.decodeIfPresent(OperationFailureReason.self, forKey: .failureReason)
-    deviceKey = try container.decodeIfPresent(String.self, forKey: .deviceKey)
-  }
+  var finishedAt: Date?
+  var error: MACDancerError?
+  /// Set when Wi-Fi had to be disconnected for this change.
+  var disconnectedWiFi = false
 }
 
-struct DaemonSnapshot: Codable, Equatable, Sendable {
-  var protocolVersion: Int = MACDancerConstants.protocolVersion
-  var revision: UInt64
-  var instanceID: UUID
-  var heartbeat: Date
-  var interfaces: [InterfaceSnapshot]
-  var pendingOperationIDs: [UUID]
-  var automation: AutomationSettings = AutomationSettings()
-  var lastError: String?
+enum RotationTrigger: String, Codable, Sendable { case beforeSleep, afterWake, becameInactive }
+
+/// Why an automatic rotation has not run yet.
+enum WaitReason: String, Codable, Sendable {
+  case busy, defaultRoute, wifiConnected, inUse, interfaceMissing
 }
 
-enum RestoreKind: String, Codable, Sendable { case systemManaged, hardware, history, specified }
-
-struct RestoreRequest: Codable, Equatable, Sendable {
-  let interfaceID: String
-  let kind: RestoreKind
-  let targetAddress: MACAddress?
-  let confirmedDisruption: Bool
-  let confirmedGlobalAddressRisk: Bool
-
-  init(
-    interfaceID: String,
-    kind: RestoreKind,
-    targetAddress: MACAddress?,
-    confirmedDisruption: Bool,
-    confirmedGlobalAddressRisk: Bool = false
-  ) {
-    self.interfaceID = interfaceID
-    self.kind = kind
-    self.targetAddress = targetAddress
-    self.confirmedDisruption = confirmedDisruption
-    self.confirmedGlobalAddressRisk = confirmedGlobalAddressRisk
-  }
+/// An automatic rotation that waits until the interface is safe to change.
+struct PendingRotation: Codable, Equatable, Sendable {
+  let trigger: RotationTrigger
+  let queuedAt: Date
+  var waitingReason: WaitReason?
 }
 
-struct RandomizeRequest: Codable, Equatable, Sendable {
-  let interfaceID: String
-  let confirmedDisruption: Bool
-  let vendorOUI: [UInt8]?
-}
-
-struct PolicyRequest: Codable, Equatable, Sendable {
-  let interfaceID: String
-  let policy: InterfacePolicy
-}
-
-struct CancelRequest: Codable, Equatable, Sendable { let interfaceID: String? }
-
-enum HistoryMutationKind: String, Codable, Sendable { case remove, clear }
-
-struct HistoryMutationRequest: Codable, Equatable, Sendable {
-  let interfaceID: String
-  let kind: HistoryMutationKind
-  let address: MACAddress?
-}
-
-struct AutomationRequest: Codable, Equatable, Sendable {
-  let settings: AutomationSettings
-}
-
-struct OperationEnvelope<Payload: Codable & Sendable>: Codable, Sendable {
-  let operationID: UUID
-  let request: Payload
-
-  init(operationID: UUID = UUID(), request: Payload) {
-    self.operationID = operationID
-    self.request = request
-  }
-}
-
-struct ConfigurationDocument: Codable, Equatable, Sendable {
-  var policies: [String: InterfacePolicy] = [:]
-  var histories: [String: HistoryLedger] = [:]
-  var pendingOperations: [OperationResult] = []
-  var automation = AutomationSettings()
-
-  init(
-    policies: [String: InterfacePolicy] = [:],
-    histories: [String: HistoryLedger] = [:],
-    pendingOperations: [OperationResult] = [],
-    automation: AutomationSettings = AutomationSettings()
-  ) {
-    self.policies = policies
-    self.histories = histories
-    self.pendingOperations = pendingOperations
-    self.automation = automation
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case policies, histories, pendingOperations, automation
-  }
-
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    policies = try container.decodeIfPresent([String: InterfacePolicy].self, forKey: .policies) ?? [:]
-    histories = try container.decodeIfPresent([String: HistoryLedger].self, forKey: .histories) ?? [:]
-    pendingOperations = try container.decodeIfPresent([OperationResult].self, forKey: .pendingOperations) ?? []
-    automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation) ?? AutomationSettings()
-  }
+/// Something the user should know about an interface after an operation.
+enum InterfaceNotice: Codable, Equatable, Sendable {
+  /// macOS rejoined Wi-Fi with its own (Private Wi-Fi) address.
+  case addressReplacedAfterReconnect(applied: MACAddress, current: MACAddress)
 }
 
 struct AutomationSettings: Codable, Equatable, Sendable {
   var rotateAfterWake = false
   var rotateWhenInterfaceBecomesInactive = false
   var prepareRotationBeforeSleep = false
+  /// Keep the hardware vendor prefix when generating random addresses.
   var vendorCompatibility = false
 
   init(
@@ -275,20 +147,107 @@ struct AutomationSettings: Codable, Equatable, Sendable {
     self.prepareRotationBeforeSleep = prepareRotationBeforeSleep
     self.vendorCompatibility = vendorCompatibility
   }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    rotateAfterWake = try container.decodeIfPresent(Bool.self, forKey: .rotateAfterWake) ?? false
+    rotateWhenInterfaceBecomesInactive =
+      try container.decodeIfPresent(Bool.self, forKey: .rotateWhenInterfaceBecomesInactive) ?? false
+    prepareRotationBeforeSleep = try container.decodeIfPresent(Bool.self, forKey: .prepareRotationBeforeSleep) ?? false
+    vendorCompatibility = try container.decodeIfPresent(Bool.self, forKey: .vendorCompatibility) ?? false
+  }
+
+  var rotatesAutomatically: Bool {
+    rotateAfterWake || rotateWhenInterfaceBecomesInactive || prepareRotationBeforeSleep
+  }
 }
 
-enum SafetyDecision: Equatable, Sendable { case allowed, deferred(String), denied(String) }
+/// Facts read from macOS for one interface, plus what MACDancer manages for it.
+struct InterfaceSnapshot: Codable, Identifiable, Equatable, Sendable {
+  var id: String { bsdName }
+  let bsdName: String
+  var displayName: String
+  var kind: InterfaceKind
+  var currentMAC: MACAddress?
+  var hardwareMAC: MACAddress?
+  /// Has a routable IP address, i.e. is carrying traffic right now.
+  var isActive: Bool
+  var isWiFiAssociated: Bool
+  var isDefaultRoute: Bool
+  var observedAt: Date
 
-enum SafetyPolicy {
-  static func decision(for interface: InterfaceSnapshot, automatic: Bool, confirmedDisruption: Bool) -> SafetyDecision {
-    guard interface.kind != .other else { return .denied("This interface type is not supported.") }
-    if automatic && interface.isDefaultRoute { return .deferred("The interface carries the default route.") }
-    if automatic && interface.kind == .wifi && (interface.isActive || interface.isWiFiAssociated) {
-      return .deferred("Active Wi-Fi is never modified automatically.")
+  // Managed by the daemon. A local read leaves these at their defaults.
+  var policy: InterfacePolicy = .systemManaged
+  var history = HistoryLedger()
+  var lastOperation: OperationRecord?
+  var pendingRotation: PendingRotation?
+  var isBusy = false
+  var notice: InterfaceNotice?
+
+  /// Changing the address may interrupt a connection.
+  var isInUse: Bool { isActive || isWiFiAssociated || isDefaultRoute }
+
+  /// Thunderbolt ports, bridges and virtual adapters report a locally
+  /// administered "hardware" address. They are hidden unless asked for.
+  var isLikelyVirtual: Bool {
+    guard kind != .wifi else { return false }
+    guard let hardwareMAC else { return true }
+    return hardwareMAC.isLocallyAdministered
+  }
+
+  var usesHardwareMAC: Bool {
+    guard let currentMAC, let hardwareMAC else { return false }
+    return currentMAC == hardwareMAC
+  }
+
+  /// Stable across reboots, and different when an adapter with the same BSD
+  /// name (a USB dongle, say) is replaced. Policies and history use this key.
+  var deviceKey: String { "\(bsdName)|\(hardwareMAC?.stringValue ?? "unverified-hardware")" }
+}
+
+struct DaemonSnapshot: Codable, Equatable, Sendable {
+  var protocolVersion = MACDancerConstants.protocolVersion
+  let instanceID: UUID
+  var revision: UInt64
+  var generatedAt: Date
+  var interfaces: [InterfaceSnapshot]
+  var automation: AutomationSettings
+  var legacyServiceDetected: Bool
+  /// Non-fatal problems such as a failed save. They never block actions.
+  var warnings: [String]
+  /// Version of the app bundle the daemon was launched from.
+  var daemonVersion: String? = nil
+}
+
+/// Where a restore request should leave the interface.
+enum RestoreTarget: Codable, Equatable, Sendable {
+  case systemManaged
+  case hardware
+  case history(MACAddress)
+  case specified(MACAddress, confirmedGlobalAddress: Bool)
+}
+
+enum PolicyChoice: String, Codable, Sendable { case systemManaged, random }
+
+/// Everything the GUI can ask of the daemon. Each request is answered with a
+/// fresh `DaemonSnapshot` or a `MACDancerError`.
+enum DaemonRequest: Codable, Equatable, Sendable {
+  case snapshot
+  case subscribe
+  case setPolicy(interfaceID: String, policy: PolicyChoice)
+  case randomize(interfaceID: String, confirmedDisruption: Bool)
+  case restore(interfaceID: String, target: RestoreTarget, confirmedDisruption: Bool)
+  /// `nil` clears the whole history.
+  case removeHistory(interfaceID: String, address: MACAddress?)
+  /// `nil` cancels pending rotations on every interface.
+  case cancelPending(interfaceID: String?)
+  case updateAutomation(AutomationSettings)
+
+  /// Requests that may write a MAC address and therefore take a while.
+  var mayWriteAddress: Bool {
+    switch self {
+    case .randomize, .restore: true
+    default: false
     }
-    if !automatic && (interface.isActive || interface.isDefaultRoute) && !confirmedDisruption {
-      return .denied("Connectivity interruption must be confirmed.")
-    }
-    return .allowed
   }
 }

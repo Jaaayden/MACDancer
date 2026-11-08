@@ -1,70 +1,126 @@
 import Foundation
+import os
 
 enum MACDancerConstants {
   static let appIdentifier = "local.macdancer.MACDancer"
   static let daemonIdentifier = "local.macdancer.MACDancer.daemon"
   static let daemonPlistName = "local.macdancer.MACDancer.daemon.plist"
   static let legacyDaemonIdentifier = "io.github.halo.LinkLiar.linkdaemon"
-  static let protocolVersion = 1
+  /// Bumped whenever the XPC request/response shapes change. GUI and daemon
+  /// refuse to talk across versions; "Repair connection" reloads the daemon.
+  static let protocolVersion = 2
   static let maximumPayloadSize = 1_048_576
-  static let errorKindUserInfoKey = "local.macdancer.MACDancer.errorKind"
+  static let errorDomain = "local.macdancer.MACDancer.error"
+  static let errorPayloadKey = "local.macdancer.MACDancer.errorPayload"
 }
 
-enum MACDancerRemoteErrorKind: String, Sendable {
-  case associatedWiFiWriteRejected
+enum Log {
+  static let daemon = Logger(subsystem: MACDancerConstants.appIdentifier, category: "daemon")
+  static let app = Logger(subsystem: MACDancerConstants.appIdentifier, category: "app")
 }
 
-enum MACDancerError: Error, Codable, Equatable, LocalizedError, Sendable {
-  case invalidMACAddress(String)
-  case randomSourceFailure(Int32)
-  case exhaustedRandomAttempts
+/// Every failure that crosses the XPC boundary. The whole value is encoded
+/// into the NSError, so the GUI sees exactly what the daemon reported and can
+/// show it in the user's language.
+enum MACDancerError: Error, Codable, Equatable, Sendable {
+  case invalidRequest(String)
   case interfaceNotFound(String)
-  case unsafeAutomaticOperation(String)
-  case disruptionConfirmationRequired
+  case unsupportedInterface(String)
+  case interfaceBusy(String)
+  case confirmationRequired
+  case legacyServiceConflict
+  case addressGenerationFailed
+  case addressInUse(MACAddress)
+  case globalAddressNeedsConfirmation
+  case hardwareAddressUnavailable
+  case historyEntryMissing(MACAddress)
+  case wifiDisconnectFailed
   case commandFailed(String)
-  case readbackMismatch(expected: String, actual: String?)
+  case readbackMismatch(expected: MACAddress, observed: MACAddress?)
   case daemonUnavailable(String)
-  case invalidPayload(String)
+  case timeout
   case incompatibleProtocol(expected: Int, actual: Int)
   case persistence(String)
-  case associatedWiFiWriteRejected
 
-  var errorDescription: String? {
+  /// English fallback text. The GUI localizes by case, not by this string.
+  var message: String {
     switch self {
-    case let .invalidMACAddress(value): "Invalid MAC address: \(value)"
-    case let .randomSourceFailure(code): "The secure random source failed (\(code))."
-    case .exhaustedRandomAttempts: "Unable to generate a non-conflicting MAC address."
+    case let .invalidRequest(detail): "Invalid request: \(detail)"
     case let .interfaceNotFound(name): "Network interface \(name) was not found."
-    case let .unsafeAutomaticOperation(reason): reason
-    case .disruptionConfirmationRequired: "This operation can interrupt connectivity and requires confirmation."
-    case let .commandFailed(message): message
-    case let .readbackMismatch(expected, actual): "MAC readback did not match \(expected); observed \(actual ?? "unavailable")."
-    case let .daemonUnavailable(message): message
-    case let .invalidPayload(message): message
-    case let .incompatibleProtocol(expected, actual): "Protocol mismatch: GUI \(expected), daemon \(actual)."
-    case let .persistence(message): message
-    case .associatedWiFiWriteRejected:
-      "macOS or the Wi-Fi driver did not accept the MAC change while Wi-Fi is connected. MACDancer did not disconnect or reconnect Wi-Fi. Disconnect Wi-Fi, wait until the interface is no longer associated, then try again."
+    case let .unsupportedInterface(name): "\(name) is not a Wi-Fi or Ethernet interface."
+    case let .interfaceBusy(name): "Another MAC change on \(name) is still running."
+    case .confirmationRequired: "This interface is in use. Confirm the possible interruption first."
+    case .legacyServiceConflict: "LinkLiar's background service is installed. Remove it before MACDancer changes MAC addresses."
+    case .addressGenerationFailed: "Could not generate an unused random MAC address."
+    case let .addressInUse(address): "\(address) is already used by another interface."
+    case .globalAddressNeedsConfirmation: "This is a globally administered (vendor) address and needs an extra confirmation."
+    case .hardwareAddressUnavailable: "macOS did not report a hardware MAC address for this interface."
+    case let .historyEntryMissing(address): "\(address) is not in this interface's history."
+    case .wifiDisconnectFailed: "Wi-Fi did not disconnect, so the MAC address was not changed."
+    case let .commandFailed(detail): "macOS rejected the MAC change: \(detail)"
+    case let .readbackMismatch(expected, observed):
+      "macOS reports \(observed?.stringValue ?? "no address") instead of \(expected)."
+    case let .daemonUnavailable(detail): detail
+    case .timeout: "The background service did not answer in time. The result is being re-read."
+    case let .incompatibleProtocol(expected, actual):
+      "The app (protocol \(expected)) and background service (protocol \(actual)) do not match. Use Repair connection."
+    case let .persistence(detail): "Could not save MACDancer settings: \(detail)"
     }
   }
 
-  /// Stable codes for errors transported over XPC. Swift's synthesized NSError
-  /// domain and case numbers are module-dependent and are not a wire protocol.
-  var xpcErrorCode: Int {
+  var code: Int {
     switch self {
-    case .invalidMACAddress: 1001
-    case .randomSourceFailure: 1002
-    case .exhaustedRandomAttempts: 1003
-    case .interfaceNotFound: 1004
-    case .unsafeAutomaticOperation: 1005
-    case .disruptionConfirmationRequired: 1006
-    case .commandFailed: 1007
-    case .readbackMismatch: 1008
-    case .daemonUnavailable: 1009
-    case .invalidPayload: 1010
-    case .incompatibleProtocol: 1011
-    case .persistence: 1012
-    case .associatedWiFiWriteRejected: 1013
+    case .invalidRequest: 1
+    case .interfaceNotFound: 2
+    case .unsupportedInterface: 3
+    case .interfaceBusy: 4
+    case .confirmationRequired: 5
+    case .legacyServiceConflict: 6
+    case .addressGenerationFailed: 7
+    case .addressInUse: 8
+    case .globalAddressNeedsConfirmation: 9
+    case .hardwareAddressUnavailable: 10
+    case .historyEntryMissing: 11
+    case .wifiDisconnectFailed: 12
+    case .commandFailed: 13
+    case .readbackMismatch: 14
+    case .daemonUnavailable: 15
+    case .timeout: 16
+    case .incompatibleProtocol: 17
+    case .persistence: 18
+    }
+  }
+}
+
+extension MACDancerError: LocalizedError {
+  var errorDescription: String? { message }
+}
+
+extension MACDancerError {
+  /// Encodes the full error for XPC. NSError userInfo only carries plist
+  /// types, so the error travels as JSON data.
+  var nsError: NSError {
+    var userInfo: [String: Any] = [NSLocalizedDescriptionKey: message]
+    if let data = try? JSONEncoder().encode(self) {
+      userInfo[MACDancerConstants.errorPayloadKey] = data
+    }
+    return NSError(domain: MACDancerConstants.errorDomain, code: code, userInfo: userInfo)
+  }
+
+  /// Recovers a daemon error; anything else (a transport failure) becomes
+  /// `daemonUnavailable` with the system's description.
+  init(_ error: Error) {
+    if let error = error as? MACDancerError {
+      self = error
+      return
+    }
+    let nsError = error as NSError
+    if nsError.domain == MACDancerConstants.errorDomain,
+       let data = nsError.userInfo[MACDancerConstants.errorPayloadKey] as? Data,
+       let decoded = try? JSONDecoder().decode(MACDancerError.self, from: data) {
+      self = decoded
+    } else {
+      self = .daemonUnavailable(nsError.localizedDescription)
     }
   }
 }

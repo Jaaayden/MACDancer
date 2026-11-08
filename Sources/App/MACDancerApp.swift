@@ -1,154 +1,101 @@
 import AppKit
 import SwiftUI
 
-private enum MACDancerSceneID {
-  static let mainWindow = "main-window"
-}
-
 @main
 struct MACDancerApp: App {
-  @NSApplicationDelegateAdaptor(MACDancerApplicationDelegate.self) private var applicationDelegate
-  @StateObject private var model = AppModel()
-  @AppStorage(MACDancerMenuBarIconPreferenceKey) private var showMenuBarIcon = true
+  @StateObject private var model = AppModel(
+    client: DaemonClient(),
+    service: ServiceController(),
+    reader: BackgroundInterfaceReader(reader: SystemInterfaceReader())
+  )
+  @StateObject private var updates = UpdateController()
+  @AppStorage(menuBarIconPreferenceKey) private var showMenuBarIcon = true
 
   var body: some Scene {
-    WindowGroup(id: MACDancerSceneID.mainWindow) {
+    // A single window: reopening it from the Dock or the menu bar brings the
+    // same window back instead of stacking copies.
+    Window(L("app.title", "MACDancer"), id: mainWindowID) {
       MainWindowView()
         .environmentObject(model)
-        .onAppear {
-          // Run on the next main-loop turn, after SwiftUI has finished the
-          // current view update transaction. AppModel.start() is idempotent.
-          DispatchQueue.main.async {
-            model.start()
-          }
+        .environmentObject(updates)
+        .task {
+          model.start()
+          updates.checkOnLaunchIfDue()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+          model.recheckService()
+          model.refresh()
         }
     }
-    .defaultSize(width: 1_060, height: 720)
-    .commands {
-      MACDancerCommands(model: model)
-    }
+    .defaultSize(width: 1_000, height: 700)
+    .commands { AppCommands(model: model, updates: updates) }
 
-    // A system symbol is intentional: it remains available in self-built apps
-    // even when a custom asset catalog was not bundled correctly.
-    MenuBarExtra(
-      L("menu_bar.title", "MACDancer"),
-      systemImage: "shuffle.circle.fill",
-      isInserted: $showMenuBarIcon
-    ) {
-      MACDancerMenuBarView()
+    MenuBarExtra(L("menu_bar.title", "MACDancer"), systemImage: "shuffle.circle.fill", isInserted: $showMenuBarIcon) {
+      MenuBarContent()
         .environmentObject(model)
     }
-    .menuBarExtraStyle(.menu)
   }
 }
 
-final class MACDancerApplicationDelegate: NSObject, NSApplicationDelegate {
-  func applicationDidFinishLaunching(_ notification: Notification) {
-    DispatchQueue.main.async {
-      bringMainWindowForward()
-    }
-  }
-}
-
-private struct MACDancerMenuBarView: View {
+private struct MenuBarContent: View {
   @EnvironmentObject private var model: AppModel
   @Environment(\.openWindow) private var openWindow
 
   var body: some View {
-    Button(L("menu_bar.open", "Open MACDancer")) {
-      showMainWindow()
+    ForEach(model.visibleInterfaces.filter(\.kind.isSupported)) { interface in
+      Text("\(interface.displayName) · \(macText(interface.currentMAC))")
     }
-
-    Button(L("menu_bar.refresh", "Refresh MAC addresses")) {
-      model.refresh()
-    }
-    .disabled(model.isRefreshing)
-
     Divider()
-
-    Button(L("menu_bar.settings", "Settings")) {
-      model.selectSection(.settings)
-      showMainWindow()
-    }
-
+    Button(L("menu_bar.open", "Open MACDancer")) { show(.dashboard) }
+    Button(L("menu_bar.refresh", "Refresh MAC addresses")) { model.refresh() }
+      .disabled(model.isRefreshing)
+    Button(L("menu_bar.settings", "Settings…")) { show(.settings) }
     Divider()
-
-    Button(L("menu_bar.quit", "Quit MACDancer")) {
-      NSApplication.shared.terminate(nil)
-    }
+    Button(L("menu_bar.quit", "Quit MACDancer")) { NSApplication.shared.terminate(nil) }
   }
 
-  private func showMainWindow() {
-    guard !bringMainWindowForward() else { return }
-    openWindow(id: MACDancerSceneID.mainWindow)
-    DispatchQueue.main.async {
-      bringMainWindowForward()
-    }
+  private func show(_ section: AppSection) {
+    model.selection = section
+    model.start()
+    openWindow(id: mainWindowID)
+    NSApplication.shared.activate()
   }
 }
 
-private struct MACDancerCommands: Commands {
+private struct AppCommands: Commands {
   @ObservedObject var model: AppModel
-  @FocusedValue(\.macDancerCopyAction) private var copyMAC
+  @ObservedObject var updates: UpdateController
   @Environment(\.openWindow) private var openWindow
 
   var body: some Commands {
+    CommandGroup(replacing: .newItem) {}
+
     CommandGroup(after: .appInfo) {
-      Button(L("command.open_settings", "Settings")) {
-        model.selectSection(.settings)
-        showMainWindow()
+      Button(L("command.check_updates", "Check for Updates…")) {
+        updates.check(userInitiated: true)
+        show(.settings)
       }
-      .keyboardShortcut(",", modifiers: .command)
-    }
-
-    CommandMenu(L("command.navigate", "Navigate")) {
-      Button(L("section.dashboard", "Dashboard")) {
-        model.selectSection(.dashboard)
-        showMainWindow()
-      }
-      .keyboardShortcut("1", modifiers: .command)
-
-      Button(L("section.interfaces", "Interfaces")) {
-        model.selectSection(.interfaces)
-        showMainWindow()
-      }
-      .keyboardShortcut("2", modifiers: .command)
-
-      Button(L("section.automation", "Automation")) {
-        model.selectSection(.automation)
-        showMainWindow()
-      }
-      .keyboardShortcut("3", modifiers: .command)
-
-      Button(L("section.settings", "Settings")) {
-        model.selectSection(.settings)
-        showMainWindow()
-      }
-      .keyboardShortcut("4", modifiers: .command)
+      .disabled(updates.isBusy)
+      Button(L("command.open_settings", "Settings…")) { show(.settings) }
+        .keyboardShortcut(",", modifiers: .command)
     }
 
     CommandGroup(after: .toolbar) {
-      Button(L("command.refresh", "Refresh MAC addresses")) {
-        model.refresh()
-      }
-      .keyboardShortcut("r", modifiers: .command)
-      .disabled(model.isRefreshing)
+      Button(L("command.refresh", "Refresh MAC addresses")) { model.refresh() }
+        .keyboardShortcut("r", modifiers: .command)
+        .disabled(model.isRefreshing)
     }
 
-    CommandGroup(after: .pasteboard) {
-      Button(L("command.copy_mac", "Copy current MAC address")) {
-        copyMAC?()
+    CommandMenu(L("command.navigate", "Navigate")) {
+      ForEach(Array(AppSection.allCases.enumerated()), id: \.element) { index, section in
+        Button(sectionTitle(section)) { show(section) }
+          .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
       }
-      .keyboardShortcut("c", modifiers: .command)
-      .disabled(copyMAC == nil)
     }
   }
 
-  private func showMainWindow() {
-    guard !bringMainWindowForward() else { return }
-    openWindow(id: MACDancerSceneID.mainWindow)
-    DispatchQueue.main.async {
-      bringMainWindowForward()
-    }
+  private func show(_ section: AppSection) {
+    model.selection = section
+    openWindow(id: mainWindowID)
   }
 }

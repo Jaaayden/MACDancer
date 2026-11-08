@@ -1,0 +1,52 @@
+#!/bin/zsh
+# Builds the signed release archive build/release/MACDancer-<version>.zip.
+#
+# Run on a Mac that has the signing certificate for DEVELOPMENT_TEAM (from
+# Configuration/Local.xcconfig). The in-app updater only installs archives
+# signed by the same team as the running app, so release builds must always
+# be signed with that team.
+
+set -euo pipefail
+
+project_root="${0:A:h:h}"
+version="$(sed -n 's/^MARKETING_VERSION = //p' "${project_root}/Configuration/Base.xcconfig")"
+out="${project_root}/build/release"
+derived="${out}/DerivedData"
+app="${derived}/Build/Products/Release/MACDancer.app"
+archive="${out}/MACDancer-${version}.zip"
+
+if [[ -z "${version}" ]]; then
+  print -u2 -- "MARKETING_VERSION not found in Configuration/Base.xcconfig."
+  exit 64
+fi
+if ! grep -qE '^DEVELOPMENT_TEAM = [A-Z0-9]{10}$' "${project_root}/Configuration/Local.xcconfig" 2>/dev/null; then
+  print -u2 -- "Set DEVELOPMENT_TEAM in Configuration/Local.xcconfig first."
+  exit 64
+fi
+
+mkdir -p "${out}"
+xcodebuild clean build \
+  -project "${project_root}/MACDancer.xcodeproj" \
+  -scheme MACDancer \
+  -configuration Release \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath "${derived}" \
+  -quiet \
+  COMPILER_INDEX_STORE_ENABLE=NO
+
+codesign --verify --deep --strict "${app}"
+built_version="$(defaults read "${app}/Contents/Info.plist" CFBundleShortVersionString)"
+if [[ "${built_version}" != "${version}" ]]; then
+  print -u2 -- "Built version ${built_version} does not match ${version}."
+  exit 65
+fi
+team="$(codesign -dv "${app}" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+if [[ -z "${team}" || "${team}" == "not set" ]]; then
+  print -u2 -- "The app is not signed with a developer team; the updater would reject it."
+  exit 65
+fi
+
+rm -f "${archive}"
+ditto -c -k --keepParent "${app}" "${archive}"
+print -- "${archive}"
+shasum -a 256 "${archive}"

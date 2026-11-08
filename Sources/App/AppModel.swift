@@ -1,742 +1,367 @@
 import Combine
 import Foundation
 
-let MACDancerLanguagePreferenceKey = "preferredLanguage"
-let MACDancerMenuBarIconPreferenceKey = "showMenuBarIcon"
-
 enum AppSection: String, CaseIterable, Hashable, Identifiable, Sendable {
-  case dashboard
-  case interfaces
-  case automation
-  case settings
-
+  case dashboard, interfaces, automation, settings
   var id: String { rawValue }
 }
 
-enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
-  case system
-  case english
-  case simplifiedChinese
-
-  var id: String { rawValue }
-}
-
-enum DaemonLifecycleState: String, Equatable, Sendable {
+/// One line the Dashboard shows about the background service.
+enum ServiceStatus: Equatable, Sendable {
   case checking
   case notInstalled
   case awaitingApproval
+  case connecting
   case ready
-  case unavailable
+  case unreachable(String)
+  case incompatible(daemonVersion: Int)
 }
 
 struct AppAlert: Identifiable, Equatable, Sendable {
-  let id: UUID
+  let id = UUID()
   let title: String
   let message: String
-
-  init(title: String, message: String) {
-    id = UUID()
-    self.title = title
-    self.message = message
-  }
 }
 
-enum RecoverySheet: Identifiable, Equatable, Sendable {
-  case randomize(interfaceID: String)
-  case handoff(interfaceID: String)
-  case hardware(interfaceID: String)
-  case history(interfaceID: String, address: String)
-  case specified(interfaceID: String)
-
-  var id: String {
-    switch self {
-    case let .randomize(interfaceID): "randomize-\(interfaceID)"
-    case let .handoff(interfaceID): "handoff-\(interfaceID)"
-    case let .hardware(interfaceID): "hardware-\(interfaceID)"
-    case let .history(interfaceID, address): "history-\(interfaceID)-\(address)"
-    case let .specified(interfaceID): "specified-\(interfaceID)"
-    }
-  }
-}
-
-/// GUI state and the only application-facing entry point for daemon actions.
-///
-/// Interface Refresh is intentionally owned by `ReadOnlyRefreshController`
-/// and is entirely independent from this daemon client.  A stopped daemon can
-/// therefore never make the visible MAC address stale after a local refresh.
+/// GUI state and the only place that talks to the daemon client.
 @MainActor
 final class AppModel: ObservableObject {
+  static let showAllInterfacesKey = "showAllInterfaces"
+  static let autoRepairedVersionKey = "autoRepairedServiceForVersion"
+
   @Published var selection: AppSection = .dashboard
-  @Published var preferredLanguage: AppLanguage {
-    didSet { UserDefaults.standard.set(preferredLanguage.rawValue, forKey: MACDancerLanguagePreferenceKey) }
+  @Published var language: AppLanguage {
+    didSet { Localizer.use(language) }
+  }
+  @Published var showAllInterfaces: Bool {
+    didSet { defaults.set(showAllInterfaces, forKey: Self.showAllInterfacesKey) }
   }
 
+  /// Every interface, merged from the local read and the daemon.
   @Published private(set) var interfaces: [InterfaceSnapshot] = []
-  @Published private(set) var snapshot: DaemonSnapshot?
-  @Published private(set) var daemonState: DaemonLifecycleState = .checking
-  @Published private(set) var daemonRegistration: DaemonRegistrationState = .unknown
-  @Published private(set) var daemonReachability: DaemonReachability = .unknown
-  @Published private(set) var daemonHealth: DaemonHealth = .unknown
-  @Published private(set) var daemonVersion: Int?
-  @Published private(set) var daemonDiagnostic: String?
-  @Published private(set) var legacyLinkLiarDetected = false
-  @Published private(set) var automationSettings = AutomationSettings()
-
-  @Published private(set) var refreshGeneration: UInt64 = 0
+  @Published private(set) var registration: ServiceRegistration = .unknown
+  @Published private(set) var connection: ConnectionState = .idle
+  @Published private(set) var daemonSnapshot: DaemonSnapshot?
+  @Published private(set) var localLegacyServiceDetected = false
   @Published private(set) var isRefreshing = false
   @Published private(set) var lastRefreshAt: Date?
-  @Published private(set) var activeOperationInterfaceIDs: Set<String> = []
+  @Published private(set) var isChangingService = false
   @Published private(set) var isUpdatingAutomation = false
-
+  /// Interfaces with a request on its way to the daemon.
+  @Published private(set) var requestsInFlight: Set<String> = []
   @Published var alert: AppAlert?
-  @Published private(set) var alerts: [AppAlert] = []
-  @Published var presentedRecovery: RecoverySheet?
 
-  private let readOnlyRefreshController: ReadOnlyRefreshController
-  private let daemonClient: any DaemonClientProviding
-  private let serviceController: any DaemonServiceProviding
-  private var isConfigured = false
-  private var refreshTask: Task<Void, Never>?
-  private var refreshRequestedWhileInFlight = false
-  private var serviceRefreshTask: Task<Void, Never>?
-  private var serviceRefreshGeneration: UInt64 = 0
-  private var legacyDetectionCompleted = false
-  private var snapshotTracker = SnapshotRevisionTracker()
-
-#if !MACDANCER_CORE_TESTS
-  init() {
-    preferredLanguage = AppLanguage(
-      rawValue: UserDefaults.standard.string(forKey: MACDancerLanguagePreferenceKey) ?? ""
-    ) ?? .system
-    readOnlyRefreshController = ReadOnlyRefreshController()
-    daemonClient = DaemonClient()
-    serviceController = DaemonServiceController()
-  }
-#endif
+  private let client: DaemonClientProviding
+  private let service: ServiceControlling
+  private let reader: LocalInterfaceReading
+  private let defaults: UserDefaults
+  private var localInterfaces: [InterfaceSnapshot] = []
+  private var started = false
+  private var refreshAgain = false
+  private let appVersion: String
+  private let autoRepairDelay: Duration
+  private var autoRepairTask: Task<Void, Never>?
 
   init(
-    readOnlyRefreshController: ReadOnlyRefreshController,
-    daemonClient: any DaemonClientProviding,
-    serviceController: any DaemonServiceProviding
+    client: DaemonClientProviding,
+    service: ServiceControlling,
+    reader: LocalInterfaceReading,
+    defaults: UserDefaults = .standard,
+    appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
+    autoRepairDelay: Duration = .seconds(25)
   ) {
-    preferredLanguage = AppLanguage(
-      rawValue: UserDefaults.standard.string(forKey: MACDancerLanguagePreferenceKey) ?? ""
-    ) ?? .system
-    self.readOnlyRefreshController = readOnlyRefreshController
-    self.daemonClient = daemonClient
-    self.serviceController = serviceController
+    self.client = client
+    self.service = service
+    self.reader = reader
+    self.defaults = defaults
+    self.appVersion = appVersion
+    self.autoRepairDelay = autoRepairDelay
+    language = Localizer.storedLanguage
+    showAllInterfaces = defaults.bool(forKey: Self.showAllInterfacesKey)
+    client.onSnapshot = { [weak self] in self?.apply($0) }
+    client.onConnectionChange = { [weak self] in self?.connectionChanged($0) }
   }
 
-  private func configure() {
-    guard !isConfigured else { return }
-    isConfigured = true
-    daemonClient.onSnapshot = { [weak self] snapshot in
-      self?.applyDaemonSnapshot(snapshot)
-    }
-    daemonClient.onStatusChange = { [weak self] status in
-      self?.applyDaemonStatus(status)
-    }
+  // MARK: - Derived state
 
-    applyCachedServiceState()
-    refreshServiceState()
-    // Construction and the first rendered frame stay independent from XPC.
-    // The client starts only after ServiceManagement reports an enabled
-    // service and the legacy-daemon safety check completes.
-    refresh()
+  var status: ServiceStatus {
+    switch registration {
+    case .unknown: return .checking
+    case .notInstalled: return .notInstalled
+    case .requiresApproval: return .awaitingApproval
+    case .enabled:
+      switch connection {
+      case .idle, .connecting: return .connecting
+      case .connected: return .ready
+      case let .unreachable(reason): return .unreachable(reason)
+      case let .incompatible(version): return .incompatible(daemonVersion: version)
+      }
+    }
   }
 
-  /// The window lifecycle starts production explicitly. Tests with injected
-  /// adapters can inspect the inert model first.
+  var isReady: Bool { status == .ready }
+  var legacyServiceDetected: Bool { localLegacyServiceDetected || daemonSnapshot?.legacyServiceDetected == true }
+  var automation: AutomationSettings { daemonSnapshot?.automation ?? AutomationSettings() }
+  var warnings: [String] { isReady ? daemonSnapshot?.warnings ?? [] : [] }
+
+  /// Wi-Fi and Ethernet adapters that are real hardware, unless the user
+  /// asked to see everything. Anything MACDancer manages always stays visible.
+  var visibleInterfaces: [InterfaceSnapshot] {
+    guard !showAllInterfaces else { return interfaces }
+    return interfaces.filter { interface in
+      (interface.kind.isSupported && !interface.isLikelyVirtual) || interface.policy != .systemManaged
+    }
+  }
+
+  var hiddenInterfaceCount: Int { interfaces.count - visibleInterfaces.count }
+
+  /// Why `interface` cannot be changed right now, or nil when it can.
+  /// Requests that only stop MACDancer from writing stay possible while
+  /// LinkLiar is installed.
+  func blockedReason(for interface: InterfaceSnapshot, allowingLegacyConflict: Bool = false) -> String? {
+    if !interface.kind.isSupported { return L("blocked.unsupported", "Only Wi-Fi and Ethernet are supported.") }
+    if !isReady { return L("blocked.service", "The background service is not ready.") }
+    if isBusy(interface) { return L("blocked.busy", "A change is in progress.") }
+    if legacyServiceDetected && !allowingLegacyConflict { return MACDancerError.legacyServiceConflict.localizedMessage }
+    return nil
+  }
+
+  func isBusy(_ interface: InterfaceSnapshot) -> Bool {
+    interface.isBusy || requestsInFlight.contains(interface.id)
+  }
+
+  // MARK: - Lifecycle
+
   func start() {
-    configure()
+    guard !started else { return }
+    started = true
+    refresh()
+    Task {
+      async let registration = service.registration()
+      async let legacy = service.legacyServiceInstalled()
+      localLegacyServiceDetected = await legacy
+      updateRegistration(await registration)
+    }
   }
 
-  func selectSection(_ section: AppSection) {
-    guard selection != section else { return }
-    selection = section
+  /// Re-checks registration, e.g. after the user approved the service in System Settings.
+  func recheckService() {
+    guard started, !isChangingService else { return }
+    Task { updateRegistration(await service.registration()) }
   }
 
-  /// Starts a single local system read.  It does not call `DaemonClient`, send
-  /// XPC, scan Wi-Fi, write configuration, or ask macOS to reconnect.
+  /// Reads current addresses from macOS. Never contacts the daemon and never
+  /// changes anything.
   func refresh() {
-    guard refreshTask == nil else {
-      refreshRequestedWhileInFlight = true
+    guard !isRefreshing else {
+      refreshAgain = true
       return
     }
     isRefreshing = true
-    refreshGeneration &+= 1
-    let requestedGeneration = refreshGeneration
-
-    refreshTask = Task { @MainActor [weak self] in
-      guard let self else { return }
-      let result = await self.readOnlyRefreshController.refresh()
-      if requestedGeneration == self.refreshGeneration {
-        self.lastRefreshAt = result.completedAt
-        if let errorDescription = result.errorDescription {
-          self.presentAlert(title: "Unable to read interfaces", message: errorDescription)
-        } else {
-          self.interfaces = self.mergingLocalInterfaces(result.interfaces, with: self.snapshot)
+    Task {
+      defer {
+        isRefreshing = false
+        if refreshAgain {
+          refreshAgain = false
+          refresh()
         }
       }
-
-      self.refreshTask = nil
-      self.isRefreshing = false
-      if self.refreshRequestedWhileInFlight {
-        self.refreshRequestedWhileInFlight = false
-        self.refresh()
-      }
-    }
-  }
-
-  func installDaemon() {
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      self.invalidateServiceRefresh()
       do {
-        try await self.serviceController.install()
-        self.applyCachedServiceState(legacyCheckCompleted: true)
-        self.startDaemonClientIfEligible()
+        localInterfaces = try await reader.interfaces()
+        lastRefreshAt = Date()
+        rebuildInterfaces()
       } catch {
-        self.presentAlert(title: "Unable to install background service", message: error.localizedDescription)
-        self.applyCachedServiceState(legacyCheckCompleted: true)
+        present(L("alert.read_failed", "Could not read network interfaces"), error)
       }
     }
   }
 
-  func uninstallDaemon() {
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      self.invalidateServiceRefresh()
+  private func connectionChanged(_ state: ConnectionState) {
+    connection = state
+    switch state {
+    case .unreachable, .incompatible:
+      scheduleAutoRepair()
+    case .connected:
+      autoRepairTask?.cancel()
+      autoRepairTask = nil
+    case .idle, .connecting:
+      break
+    }
+  }
+
+  /// After an update the old daemon may still be running. A new daemon
+  /// restarts itself within seconds; one from before self-restart existed
+  /// cannot, so the service is re-registered once per app version if it is
+  /// still unreachable after a grace period.
+  private func scheduleAutoRepair() {
+    guard autoRepairTask == nil, defaults.string(forKey: Self.autoRepairedVersionKey) != appVersion else { return }
+    autoRepairTask = Task { [weak self, autoRepairDelay] in
+      try? await Task.sleep(for: autoRepairDelay)
+      guard let self, !Task.isCancelled else { return }
+      self.autoRepairTask = nil
+      guard self.registration == .enabled, !self.isReady, !self.isChangingService,
+            self.defaults.string(forKey: Self.autoRepairedVersionKey) != self.appVersion else { return }
+      self.defaults.set(self.appVersion, forKey: Self.autoRepairedVersionKey)
+      Log.app.notice("Background service still unreachable; re-registering it once for this version")
+      self.repairService()
+    }
+  }
+
+  private func updateRegistration(_ state: ServiceRegistration) {
+    registration = state
+    if state == .enabled { client.start() } else { client.stop() }
+  }
+
+  private func apply(_ snapshot: DaemonSnapshot) {
+    if let current = daemonSnapshot, current.instanceID == snapshot.instanceID, snapshot.revision < current.revision {
+      return // An older reply arrived after a newer push.
+    }
+    daemonSnapshot = snapshot
+    rebuildInterfaces()
+  }
+
+  private func rebuildInterfaces() {
+    interfaces = Self.merge(local: localInterfaces, daemon: daemonSnapshot)
+  }
+
+  /// Live facts come from whichever read is newer; what MACDancer manages
+  /// (policy, history, operations) always comes from the daemon.
+  static func merge(local: [InterfaceSnapshot], daemon: DaemonSnapshot?) -> [InterfaceSnapshot] {
+    guard let daemon else { return local }
+    let localAt = local.map(\.observedAt).max() ?? .distantPast
+    let daemonAt = daemon.interfaces.map(\.observedAt).max() ?? .distantPast
+    let managed = Dictionary(daemon.interfaces.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let base = daemonAt >= localAt ? daemon.interfaces : local
+    return base.map { interface in
+      guard let source = managed[interface.id], source.deviceKey == interface.deviceKey else { return interface }
+      var merged = interface
+      merged.policy = source.policy
+      merged.history = source.history
+      merged.lastOperation = source.lastOperation
+      merged.pendingRotation = source.pendingRotation
+      merged.isBusy = source.isBusy
+      merged.notice = source.notice
+      return merged
+    }
+    .sorted { $0.bsdName < $1.bsdName }
+  }
+
+  // MARK: - Background service
+
+  func installService() { changeService(L("alert.install_failed", "Could not install the background service"), service.install) }
+  func uninstallService() { changeService(L("alert.uninstall_failed", "Could not uninstall the background service"), service.uninstall) }
+  func repairService() { changeService(L("alert.repair_failed", "Could not repair the background service"), service.repair) }
+  func openApprovalSettings() { service.openApprovalSettings() }
+
+  private func changeService(_ failureTitle: String, _ action: @escaping () async throws -> Void) {
+    guard !isChangingService else { return }
+    isChangingService = true
+    Task {
+      defer { isChangingService = false }
+      if await service.legacyServiceInstalled() {
+        localLegacyServiceDetected = true
+      }
+      client.stop()
       do {
-        // Deliberately does not restore any MAC or remove daemon configuration.
-        try await self.serviceController.uninstall()
-        self.daemonClient.stop()
-        self.applyCachedServiceState()
+        try await action()
       } catch {
-        self.presentAlert(title: "Unable to uninstall background service", message: error.localizedDescription)
-        self.applyCachedServiceState()
+        present(failureTitle, error)
       }
+      updateRegistration(await service.registration())
     }
   }
 
-  func repairDaemon() {
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      self.invalidateServiceRefresh()
-      do {
-        try await self.serviceController.repair()
-        self.applyCachedServiceState(legacyCheckCompleted: true)
-        self.startDaemonClientIfEligible()
-      } catch {
-        self.presentAlert(title: "Unable to repair background service", message: error.localizedDescription)
-        self.applyCachedServiceState(legacyCheckCompleted: true)
-      }
-    }
-  }
+  // MARK: - Interface actions
 
-  func openApprovalSettings() {
-    serviceController.openApprovalSettings()
-  }
+  /// Changing an interface that is in use needs the user's confirmation
+  /// first; for connected Wi-Fi that means a disconnect.
+  func needsConfirmation(_ interface: InterfaceSnapshot) -> Bool { interface.isInUse }
 
-  func openSystemSettings() {
-    openApprovalSettings()
-  }
-
-  func openSettings() {
-    selectSection(.settings)
-  }
-
-  /// The calling UI presents its confirmation dialog before invoking this
-  /// method for active/default-route interfaces.  Callers that need a
-  /// programmatic safety gate should use the overload with an explicit flag.
-  func randomize(interface: InterfaceSnapshot) {
-    randomize(
-      interface: interface,
-      confirmedDisruption: interface.isActive || interface.isDefaultRoute
+  func randomize(_ interface: InterfaceSnapshot, confirmed: Bool) {
+    send(
+      .randomize(interfaceID: interface.id, confirmedDisruption: confirmed),
+      for: interface, failureTitle: L("alert.randomize_failed", "Could not randomize the MAC address")
     )
   }
 
-  func randomize(interface: InterfaceSnapshot, confirmedDisruption: Bool) {
-    guard ensureDaemonReadyForMutation() else { return }
-    switch SafetyPolicy.decision(
-      for: interface,
-      automatic: false,
-      confirmedDisruption: confirmedDisruption
-    ) {
-    case .allowed:
-      let request = RandomizeRequest(
-        interfaceID: interface.id,
-        confirmedDisruption: confirmedDisruption,
-        vendorOUI: nil
-      )
-      submit("Randomize MAC", interfaceID: interface.id) { [daemonClient] in
-        try await daemonClient.randomize(request)
-      }
-    case let .denied(reason):
-      presentedRecovery = .randomize(interfaceID: interface.id)
-      presentAlert(title: "Confirmation required", message: reason)
-    case let .deferred(reason):
-      presentAlert(title: "MAC change deferred", message: reason)
-    }
+  func restore(_ interface: InterfaceSnapshot, to target: RestoreTarget, confirmed: Bool) {
+    send(
+      .restore(interfaceID: interface.id, target: target, confirmedDisruption: confirmed),
+      for: interface, failureTitle: L("alert.restore_failed", "Could not restore the MAC address")
+    )
   }
 
-  func setPolicy(_ request: PolicyRequest) {
-    guard ensureDaemonReadyForMutation(allowSystemManaged: request.policy == .systemManaged) else { return }
-    submit("Update interface policy", interfaceID: request.interfaceID, crossCheck: false) { [daemonClient] in
-      try await daemonClient.setPolicy(request)
-    }
+  func setPolicy(_ interface: InterfaceSnapshot, _ choice: PolicyChoice) {
+    send(
+      .setPolicy(interfaceID: interface.id, policy: choice),
+      for: interface, failureTitle: L("alert.policy_failed", "Could not change the policy")
+    )
   }
 
-  func setPolicy(interfaceID: String, policy: InterfacePolicy) {
-    setPolicy(PolicyRequest(interfaceID: interfaceID, policy: policy))
+  func removeHistory(_ interface: InterfaceSnapshot, address: MACAddress?) {
+    send(
+      .removeHistory(interfaceID: interface.id, address: address),
+      for: interface, failureTitle: L("alert.history_failed", "Could not change the history")
+    )
   }
 
-  /// Handoff never attempts to program macOS Private Wi-Fi Address.  It first
-  /// cancels MACDancer work for the interface, then makes the daemon stop
-  /// managing that interface.
-  func handoff(interfaceID: String, completion: (@MainActor () -> Void)? = nil) {
-    presentedRecovery = nil
-    guard ensureDaemonReadyForMutation(allowSystemManaged: true) else { return }
-    guard !activeOperationInterfaceIDs.contains(interfaceID) else {
-      presentAlert(
-        title: "Operation already in progress",
-        message: "Wait for the current verified result before handing off this interface."
-      )
-      return
-    }
-    activeOperationInterfaceIDs.insert(interfaceID)
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      defer { self.activeOperationInterfaceIDs.remove(interfaceID) }
-      do {
-        self.applyDaemonSnapshot(try await self.daemonClient.restore(RestoreRequest(
-          interfaceID: interfaceID,
-          kind: .systemManaged,
-          targetAddress: nil,
-          confirmedDisruption: false
-        )))
-        self.refresh()
-        completion?()
-      } catch {
-        self.presentAlert(title: "Unable to hand off interface", message: error.localizedDescription)
-      }
-    }
+  func cancelPending(_ interface: InterfaceSnapshot) {
+    send(
+      .cancelPending(interfaceID: interface.id),
+      for: interface, failureTitle: L("alert.cancel_failed", "Could not cancel the pending rotation")
+    )
   }
 
-  func restore(_ request: RestoreRequest) {
-    guard ensureDaemonReadyForMutation(allowSystemManaged: request.kind == .systemManaged) else { return }
-    submit("Restore MAC", interfaceID: request.interfaceID) { [daemonClient] in
-      try await daemonClient.restore(request)
-    }
-  }
-
-  func restoreHardware(interfaceID: String, confirmed: Bool) {
-    guard let interface = interfaces.first(where: { $0.id == interfaceID }) else {
-      presentAlert(title: "Interface unavailable", message: "The selected network interface is no longer available.")
-      return
-    }
-    guard interface.hardwareMAC != nil else {
-      presentAlert(title: "Hardware MAC unavailable", message: "macOS did not report a hardware MAC address for this interface.")
-      return
-    }
-    let changesAddress = interface.currentMAC != interface.hardwareMAC
-    guard confirmed || !changesAddress || !(interface.isActive || interface.isDefaultRoute) else {
-      presentedRecovery = .hardware(interfaceID: interfaceID)
-      return
-    }
-    restore(RestoreRequest(
-      interfaceID: interfaceID,
-      kind: .hardware,
-      targetAddress: nil,
-      confirmedDisruption: confirmed
-    ))
-  }
-
-  func restoreHistory(interfaceID: String, address: String, confirmed: Bool) {
-    guard let interface = interfaces.first(where: { $0.id == interfaceID }),
-          let target = MACAddress(address),
-          interface.history.entries.contains(where: { $0.address == target }) else {
-      presentAlert(title: "History entry unavailable", message: "This address is not in the selected interface's saved history.")
-      return
-    }
-    guard target.isValidAssignable else {
-      presentAlert(title: "Invalid MAC address", message: "The selected history entry is not a valid unicast MAC address.")
-      return
-    }
-    let changesAddress = interface.currentMAC != target
-    guard confirmed || !changesAddress || !(interface.isActive || interface.isDefaultRoute) else {
-      presentedRecovery = .history(interfaceID: interfaceID, address: address)
-      return
-    }
-    restore(RestoreRequest(
-      interfaceID: interfaceID,
-      kind: .history,
-      targetAddress: target,
-      confirmedDisruption: confirmed
-    ))
-  }
-
-  func restoreSpecified(
-    interfaceID: String,
-    address: String,
-    confirmed: Bool,
-    confirmedGlobalAddressRisk: Bool
-  ) {
-    guard let interface = interfaces.first(where: { $0.id == interfaceID }) else {
-      presentAlert(title: "Interface unavailable", message: "The selected network interface is no longer available.")
-      return
-    }
-    guard let target = MACAddress(address), target.isValidAssignable else {
-      presentAlert(title: "Invalid MAC address", message: "Enter a valid unicast, non-zero 48-bit MAC address.")
-      return
-    }
-    guard target.isLocallyAdministered || confirmedGlobalAddressRisk else {
-      presentAlert(
-        title: "Additional confirmation required",
-        message: "A globally administered specified address can impersonate another device identity. Confirm that risk before continuing."
-      )
-      return
-    }
-    let changesAddress = interface.currentMAC != target
-    guard confirmed || !changesAddress || !(interface.isActive || interface.isDefaultRoute) else {
-      presentedRecovery = .specified(interfaceID: interfaceID)
-      return
-    }
-    restore(RestoreRequest(
-      interfaceID: interfaceID,
-      kind: .specified,
-      targetAddress: target,
-      confirmedDisruption: confirmed,
-      confirmedGlobalAddressRisk: confirmedGlobalAddressRisk
-    ))
-  }
-
-  func cancel(interfaceID: String? = nil) {
-    guard ensureDaemonReadyForMutation(allowSystemManaged: true) else { return }
-    submit("Cancel pending operation", crossCheck: false) { [daemonClient] in
-      try await daemonClient.cancel(CancelRequest(interfaceID: interfaceID))
-    }
-  }
-
-  func removeHistory(interfaceID: String, address: MACAddress) {
-    guard ensureDaemonReadyForMutation(allowSystemManaged: true) else { return }
-    submit("Remove history entry", crossCheck: false) { [daemonClient] in
-      try await daemonClient.updateHistory(HistoryMutationRequest(
-        interfaceID: interfaceID,
-        kind: .remove,
-        address: address
-      ))
-    }
-  }
-
-  func clearHistory(interfaceID: String) {
-    guard ensureDaemonReadyForMutation(allowSystemManaged: true) else { return }
-    submit("Clear interface history", crossCheck: false) { [daemonClient] in
-      try await daemonClient.updateHistory(HistoryMutationRequest(
-        interfaceID: interfaceID,
-        kind: .clear,
-        address: nil
-      ))
-    }
-  }
-
-  func updateAutomation(_ settings: AutomationSettings) {
-    guard !isUpdatingAutomation else { return }
-    let enablesManagedBehavior = settings.rotateAfterWake
-      || settings.rotateWhenInterfaceBecomesInactive
-      || settings.prepareRotationBeforeSleep
-      || settings.vendorCompatibility
-    guard ensureDaemonReadyForMutation(allowSystemManaged: !enablesManagedBehavior) else { return }
-
-    let previous = automationSettings
-    automationSettings = settings
+  func setAutomation(_ settings: AutomationSettings) {
+    guard isReady, !isUpdatingAutomation else { return }
     isUpdatingAutomation = true
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      defer { self.isUpdatingAutomation = false }
+    Task {
+      defer { isUpdatingAutomation = false }
       do {
-        self.applyDaemonSnapshot(try await self.daemonClient.updateAutomation(
-          AutomationRequest(settings: settings)
-        ))
+        apply(try await client.send(.updateAutomation(settings)))
       } catch {
-        self.automationSettings = previous
-        self.presentAlert(title: "Unable to update automation", message: error.localizedDescription)
+        present(L("alert.automation_failed", "Could not update automation"), error)
       }
     }
   }
 
-  private func submit(
-    _ title: String,
-    interfaceID: String? = nil,
-    crossCheck: Bool = true,
-    operation: @escaping @MainActor () async throws -> DaemonSnapshot
-  ) {
-    if let interfaceID, activeOperationInterfaceIDs.contains(interfaceID) {
-      presentAlert(
-        title: "Operation already in progress",
-        message: "Wait for the current verified result before requesting another MAC operation on this interface."
-      )
+  private func send(_ request: DaemonRequest, for interface: InterfaceSnapshot, failureTitle: String) {
+    if let reason = blockedReason(for: interface, allowingLegacyConflict: request.onlyReducesManagement) {
+      alert = AppAlert(title: failureTitle, message: reason)
       return
     }
-    if let interfaceID { activeOperationInterfaceIDs.insert(interfaceID) }
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      defer {
-        if let interfaceID { self.activeOperationInterfaceIDs.remove(interfaceID) }
-      }
+    requestsInFlight.insert(interface.id)
+    Task {
+      defer { requestsInFlight.remove(interface.id) }
       do {
-        self.applyDaemonSnapshot(try await operation())
-        if crossCheck { self.refresh() }
+        apply(try await client.send(request))
       } catch {
-        self.presentOperationError(fallbackTitle: title, error: error)
+        let error = MACDancerError(error)
+        if error == .timeout {
+          // The write may still finish; show whatever the daemon reports next.
+          if let snapshot = try? await client.send(.snapshot) { apply(snapshot) }
+        }
+        present(failureTitle, error)
       }
+      if request.mayWriteAddress { refresh() }
     }
   }
 
-  func isOperationInProgress(interfaceID: String) -> Bool {
-    activeOperationInterfaceIDs.contains(interfaceID)
-  }
-
-  private func ensureNoLegacyConflict(allowSystemManaged: Bool = false) -> Bool {
-    applyCachedServiceState()
-    guard legacyDetectionCompleted || allowSystemManaged else {
-      presentAlert(
-        title: "Safety check in progress",
-        message: "Wait for MACDancer to finish checking for the legacy LinkLiar service before changing a MAC address."
-      )
-      return false
-    }
-    guard !legacyLinkLiarDetected || allowSystemManaged else {
-      presentAlert(
-        title: "Legacy LinkLiar service detected",
-        message: "MACDancer will not change a MAC or enable automatic policies while LinkLiar's legacy daemon is installed. Disable or remove the legacy service first."
-      )
-      return false
-    }
-    return true
-  }
-
-  private func ensureDaemonReadyForMutation(allowSystemManaged: Bool = false) -> Bool {
-    guard ensureNoLegacyConflict(allowSystemManaged: allowSystemManaged) else { return false }
-    guard daemonRegistration == .enabled else {
-      presentAlert(
-        title: "Background service required",
-        message: daemonRegistration == .requiresApproval
-          ? "Approve the MACDancer background service in System Settings before continuing."
-          : "Install the MACDancer background service from the Dashboard before continuing."
-      )
-      return false
-    }
-    guard daemonReachability == .reachable, daemonHealth == .healthy else {
-      presentAlert(
-        title: "Background service unavailable",
-        message: "The service is installed but is not currently healthy and reachable. Repair it from the Dashboard before continuing."
-      )
-      return false
-    }
-    return true
-  }
-
-  private func applyCachedServiceState(legacyCheckCompleted: Bool = false) {
-    daemonRegistration = serviceController.registrationState
-    legacyLinkLiarDetected = serviceController.legacyLinkLiarDetected
-    if legacyCheckCompleted { legacyDetectionCompleted = true }
-    deriveDaemonLifecycleState()
-  }
-
-  /// ServiceManagement and legacy launchd inspection can both block. Their
-  /// implementations perform those reads off MainActor and return snapshots
-  /// that are cached for all subsequent XPC status callbacks.
-  private func refreshServiceState() {
-    guard serviceRefreshTask == nil else { return }
-    serviceRefreshGeneration &+= 1
-    let generation = serviceRefreshGeneration
-    serviceRefreshTask = Task { @MainActor [weak self] in
-      guard let self else { return }
-      let registration = await self.serviceController.refreshRegistrationState()
-      guard !Task.isCancelled, generation == self.serviceRefreshGeneration else { return }
-      self.daemonRegistration = registration
-      let detected = await self.serviceController.refreshLegacyLinkLiarDetection()
-      guard !Task.isCancelled, generation == self.serviceRefreshGeneration else { return }
-      self.legacyLinkLiarDetected = detected
-      self.legacyDetectionCompleted = true
-      self.deriveDaemonLifecycleState()
-      self.startDaemonClientIfEligible()
-      self.serviceRefreshTask = nil
-    }
-  }
-
-  private func invalidateServiceRefresh() {
-    serviceRefreshGeneration &+= 1
-    serviceRefreshTask?.cancel()
-    serviceRefreshTask = nil
-  }
-
-  private func startDaemonClientIfEligible() {
-    guard daemonRegistration == .enabled,
-          legacyDetectionCompleted,
-          !legacyLinkLiarDetected else { return }
-    daemonClient.start()
-  }
-
-  private func applyDaemonStatus(_ status: DaemonClientStatus) {
-    daemonReachability = status.reachability
-    daemonHealth = status.health
-    daemonVersion = status.version
-    daemonDiagnostic = status.diagnostic
-    // Service state values are cached; XPC reconnects never synchronously
-    // invoke ServiceManagement or launchctl on MainActor.
-    daemonRegistration = serviceController.registrationState
-    legacyLinkLiarDetected = serviceController.legacyLinkLiarDetected
-    deriveDaemonLifecycleState()
-  }
-
-  private func applyDaemonSnapshot(_ incoming: DaemonSnapshot) {
-    guard incoming.protocolVersion == MACDancerConstants.protocolVersion else {
-      daemonHealth = .incompatible
-      daemonVersion = incoming.protocolVersion
-      daemonDiagnostic = MACDancerError.incompatibleProtocol(
-        expected: MACDancerConstants.protocolVersion,
-        actual: incoming.protocolVersion
-      ).localizedDescription
-      deriveDaemonLifecycleState()
-      return
-    }
-
-    guard snapshotTracker.accepts(incoming) else { return }
-    snapshot = incoming
-    automationSettings = incoming.automation
-    daemonReachability = .reachable
-    daemonVersion = incoming.protocolVersion
-    daemonHealth = Date().timeIntervalSince(incoming.heartbeat) > 60
-      ? .stale
-      : (incoming.lastError == nil ? .healthy : .unhealthy)
-    daemonDiagnostic = incoming.lastError
-    daemonRegistration = serviceController.registrationState
-    legacyLinkLiarDetected = serviceController.legacyLinkLiarDetected
-    // A daemon snapshot following a successful command contains the daemon's
-    // verified read-back value.  Prefer it immediately so "Randomize now"
-    // updates the visible address without waiting for another manual refresh.
-    interfaces = mergingDaemonInterfaces(incoming.interfaces, into: interfaces)
-    deriveDaemonLifecycleState()
-  }
-
-  private func mergingLocalInterfaces(
-    _ localInterfaces: [InterfaceSnapshot],
-    with daemonSnapshot: DaemonSnapshot?
-  ) -> [InterfaceSnapshot] {
-    guard let daemonSnapshot else { return localInterfaces }
-    let daemonInterfaces = Dictionary(uniqueKeysWithValues: daemonSnapshot.interfaces.map { ($0.id, $0) })
-    var merged = localInterfaces.map { local in
-      guard let daemon = daemonInterfaces[local.id] else { return local }
-      var result = local
-      result.policy = daemon.policy
-      result.history = daemon.history
-      result.lastOperation = daemon.lastOperation
-      result.errorMessage = daemon.errorMessage ?? local.errorMessage
-      if daemon.hardwareMAC != nil { result.hardwareMAC = daemon.hardwareMAC }
-      return result
-    }
-
-    // Before the first local read, daemon data is useful as a provisional UI
-    // snapshot.  Once local data exists, never let a daemon-only interface
-    // overwrite current values obtained from macOS.
-    if localInterfaces.isEmpty {
-      merged = daemonSnapshot.interfaces
-    }
-    return merged.sorted { $0.id < $1.id }
-  }
-
-  private func mergingDaemonInterfaces(
-    _ daemonInterfaces: [InterfaceSnapshot],
-    into visibleInterfaces: [InterfaceSnapshot]
-  ) -> [InterfaceSnapshot] {
-    guard !visibleInterfaces.isEmpty else {
-      return daemonInterfaces.sorted { $0.id < $1.id }
-    }
-
-    let daemonByID = Dictionary(uniqueKeysWithValues: daemonInterfaces.map { ($0.id, $0) })
-    var merged = visibleInterfaces.map { visible in
-      guard let daemon = daemonByID[visible.id] else { return visible }
-      var result = visible
-      // The daemon reply is authoritative for a just-completed, verified MAC
-      // write. Keep locally read topology/activity facts because they may be
-      // newer than the daemon's last reconciliation.
-      result.currentMAC = daemon.currentMAC
-      if daemon.hardwareMAC != nil { result.hardwareMAC = daemon.hardwareMAC }
-      result.policy = daemon.policy
-      result.history = daemon.history
-      result.lastOperation = daemon.lastOperation
-      result.errorMessage = daemon.errorMessage ?? visible.errorMessage
-      return result
-    }
-    let visibleIDs = Set(visibleInterfaces.map(\.id))
-    merged.append(contentsOf: daemonInterfaces.filter { !visibleIDs.contains($0.id) })
-    return merged.sorted { $0.id < $1.id }
-  }
-
-  private func deriveDaemonLifecycleState() {
-    guard legacyDetectionCompleted else {
-      daemonState = .checking
-      return
-    }
-    if legacyLinkLiarDetected {
-      daemonState = .unavailable
-      return
-    }
-    switch daemonRegistration {
-    case .notInstalled, .notFound:
-      daemonState = .notInstalled
-    case .requiresApproval:
-      daemonState = .awaitingApproval
-    case .enabled:
-      daemonState = daemonReachability == .reachable && daemonHealth == .healthy ? .ready : .unavailable
-    case .unknown:
-      daemonState = .checking
-    }
-  }
-
-  private func presentAlert(title: String, message: String) {
-    let newAlert = AppAlert(title: title, message: message)
-    alert = newAlert
-    alerts.append(newAlert)
-    if alerts.count > 12 {
-      alerts.removeFirst(alerts.count - 12)
-    }
-  }
-
-  private func presentOperationError(fallbackTitle: String, error: Error) {
+  private func present(_ title: String, _ error: Error) {
     let nsError = error as NSError
-    let kind = nsError.userInfo[MACDancerConstants.errorKindUserInfoKey] as? String
-    guard kind == MACDancerRemoteErrorKind.associatedWiFiWriteRejected.rawValue else {
-      presentAlert(title: fallbackTitle, message: error.localizedDescription)
-      return
-    }
-    presentAlert(
-      title: localizedAppString(
-        "error.wifi_associated_write_rejected.title",
-        "Unable to change the MAC while Wi-Fi is connected"
-      ),
-      message: localizedAppString(
-        "error.wifi_associated_write_rejected.message",
-        "macOS or the Wi-Fi driver did not accept the MAC change while this network is connected. MACDancer did not disconnect or reconnect Wi-Fi. Disconnect Wi-Fi, wait until the interface is no longer associated, then try again."
-      )
-    )
+    let message = error is MACDancerError || nsError.domain == MACDancerConstants.errorDomain
+      ? MACDancerError(error).localizedMessage
+      : nsError.localizedDescription
+    alert = AppAlert(title: title, message: message)
   }
+}
 
-  private func localizedAppString(_ key: String, _ defaultValue: String) -> String {
-    switch preferredLanguage {
-    case .english:
-      defaultValue
-    case .simplifiedChinese:
-      if let path = Bundle.main.path(forResource: "zh-Hans", ofType: "lproj"),
-         let bundle = Bundle(path: path) {
-        bundle.localizedString(forKey: key, value: defaultValue, table: nil)
-      } else {
-        defaultValue
-      }
-    case .system:
-      Bundle.main.localizedString(forKey: key, value: defaultValue, table: nil)
+private extension DaemonRequest {
+  /// True for requests that never write an address or enable automation.
+  var onlyReducesManagement: Bool {
+    switch self {
+    case .restore(_, .systemManaged, _), .setPolicy(_, .systemManaged), .removeHistory, .cancelPending: true
+    default: false
     }
   }
 }

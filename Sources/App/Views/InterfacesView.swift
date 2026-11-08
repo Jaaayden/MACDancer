@@ -1,247 +1,155 @@
 import SwiftUI
 
-struct InterfacesPageView: View {
+struct InterfacesView: View {
   @EnvironmentObject private var model: AppModel
 
-  @Binding var selectedInterfaceID: String?
-  let onRandomize: (InterfaceSnapshot) -> Void
-  let onRestore: (InterfaceSnapshot) -> Void
-
   var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 16) {
-        SectionHeader(
-          title: L("interfaces.title", "Interfaces"),
-          subtitle: L("interfaces.subtitle", "Current values are read directly from macOS. Changing a MAC is always an explicit action.")
-        )
-
-        if model.interfaces.isEmpty {
-          EmptyState(
-            systemImage: "network.slash",
-            title: L("interfaces.empty.title", "No supported interfaces found"),
-            detail: L("interfaces.empty.detail", "MACDancer lists Wi-Fi and Ethernet adapters that macOS reports as usable."),
-            actionTitle: L("common.refresh", "Refresh"),
-            action: { model.refresh() }
-          )
-          .frame(minHeight: 320)
-        } else {
-          ForEach(model.interfaces) { interface in
-            InterfaceStatusCard(
-              interface: interface,
-              isSelected: selectedInterfaceID == interface.id,
-              onCopy: {
-                if let address = interface.currentMAC {
-                  copyToPasteboard(address.stringValue)
-                }
-              },
-              onRandomize: { onRandomize(interface) },
-              onRestore: { onRestore(interface) }
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-              selectedInterfaceID = interface.id
-            }
-          }
+    Page(
+      title: L("interfaces.title", "Interfaces"),
+      subtitle: L("interfaces.subtitle", "Current values are read directly from macOS. Changing a MAC is always an explicit action.")
+    ) {
+      HStack {
+        Toggle(L("interfaces.show_all", "Show Thunderbolt, bridge and virtual interfaces"), isOn: $model.showAllInterfaces)
+          .toggleStyle(.checkbox)
+        Spacer()
+        if !model.showAllInterfaces && model.hiddenInterfaceCount > 0 {
+          Text(L("interfaces.hidden_count", "%d hidden", model.hiddenInterfaceCount))
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
-      .padding(24)
-      .frame(maxWidth: 1_060, alignment: .leading)
+
+      if model.visibleInterfaces.isEmpty {
+        ContentUnavailableView(
+          L("interfaces.empty.title", "No interfaces to show"),
+          systemImage: "network.slash",
+          description: Text(L("interfaces.empty.detail", "MACDancer lists the Wi-Fi and Ethernet adapters macOS reports."))
+        )
+      } else {
+        ForEach(model.visibleInterfaces) { interface in
+          InterfaceCard(interface: interface, compact: false)
+        }
+      }
     }
-    .navigationTitle(L("interfaces.title", "Interfaces"))
   }
 }
 
-struct InterfaceStatusCard: View {
+struct InterfaceCard: View {
   @EnvironmentObject private var model: AppModel
-
+  @Environment(\.interfaceActions) private var actions
   let interface: InterfaceSnapshot
-  var compact = false
-  var isSelected = false
-  let onCopy: () -> Void
-  let onRandomize: () -> Void
-  let onRestore: () -> Void
+  let compact: Bool
   @State private var confirmsClearHistory = false
 
-  private var usesHardwareMAC: Bool {
-    guard let current = interface.currentMAC, let hardware = interface.hardwareMAC else { return false }
-    return current == hardware
-  }
-
-  private var operationInProgress: Bool {
-    model.isOperationInProgress(interfaceID: interface.id)
-  }
-
-  private var interfaceSymbol: String {
-    switch interface.kind {
-    case .wifi:
-      "wifi"
-    case .ethernet:
-      "cable.connector.horizontal"
-    case .other:
-      "network"
-    }
-  }
+  private var blockedReason: String? { model.blockedReason(for: interface) }
 
   var body: some View {
     GroupBox {
-      VStack(alignment: .leading, spacing: compact ? 10 : 14) {
+      VStack(alignment: .leading, spacing: 12) {
         header
-
-        if compact {
-          compactDetails
-        } else {
-          detailedMACs
-          operationDetails
-          historyDetails
-        }
-
+        addresses
+        status
+        if !compact { history }
         Divider()
-        actions
+        buttons
       }
-      .padding(5)
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: 8)
-        .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-        .padding(1)
+      .padding(4)
     }
     .contextMenu {
-      Button(L("interface.action.copy", "Copy current MAC"), action: onCopy)
+      Button(L("interface.action.copy", "Copy current MAC")) { copy(interface.currentMAC) }
         .disabled(interface.currentMAC == nil)
-      Button(L("interface.action.randomize", "Randomize now"), action: onRandomize)
-        .disabled(interface.kind == .other || operationInProgress)
-      Button(L("interface.action.restore", "Restore…"), action: onRestore)
-        .disabled(operationInProgress)
+      Button(L("interface.action.copy_hardware", "Copy hardware MAC")) { copy(interface.hardwareMAC) }
+        .disabled(interface.hardwareMAC == nil)
     }
-    .alert(
-      L("history.clear.confirmation.title", "Clear this interface’s MAC history?"),
-      isPresented: $confirmsClearHistory
-    ) {
-      Button(L("history.clear.action", "Clear History"), role: .destructive) {
-        model.clearHistory(interfaceID: interface.id)
-      }
+    .alert(L("history.clear.confirmation.title", "Clear this interface’s MAC history?"), isPresented: $confirmsClearHistory) {
+      Button(L("history.clear.action", "Clear History"), role: .destructive) { model.removeHistory(interface, address: nil) }
       Button(L("common.cancel", "Cancel"), role: .cancel) {}
     } message: {
-      Text(L(
-        "history.clear.confirmation.message",
-        "This removes saved MAC choices for this interface. It does not change the current MAC address or policy."
-      ))
+      Text(L("history.clear.confirmation.message", "This removes saved MAC choices for this interface. It does not change the current MAC address or policy."))
     }
   }
 
   private var header: some View {
     HStack(alignment: .top, spacing: 12) {
-      Image(systemName: interfaceSymbol)
+      Image(systemName: symbol)
         .font(.title2)
+        .foregroundStyle(interface.kind.isSupported ? Color.accentColor : .secondary)
         .frame(width: 28)
-        .foregroundStyle(interface.kind == .other ? .secondary : Color.accentColor)
-
-      VStack(alignment: .leading, spacing: 5) {
+      VStack(alignment: .leading, spacing: 3) {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text(interface.displayName)
-            .font(.headline)
+          Text(interface.displayName).font(.headline)
           Text(interface.bsdName)
             .font(.system(.subheadline, design: .monospaced))
             .foregroundStyle(.secondary)
         }
-
-        Text(policyText(interface.policy))
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
+        Text(policyText(interface.policy)).font(.subheadline).foregroundStyle(.secondary)
       }
-
       Spacer()
-
       HStack(spacing: 6) {
         if interface.isDefaultRoute {
-          StatusPill(
-            title: L("interface.default_route", "Default route"),
-            systemImage: "arrow.triangle.branch",
-            tint: .orange
-          )
+          StatusPill(title: L("interface.default_route", "Default route"), systemImage: "arrow.triangle.branch", tint: .orange)
         }
-        if interface.isActive {
-          StatusPill(
-            title: L("interface.active", "Active"),
-            systemImage: "bolt.fill",
-            tint: .green
-          )
+        if interface.isWiFiAssociated {
+          StatusPill(title: L("interface.wifi_connected", "Connected"), systemImage: "wifi", tint: .green)
+        } else if interface.isActive {
+          StatusPill(title: L("interface.active", "In use"), systemImage: "bolt.fill", tint: .green)
+        }
+        if interface.usesHardwareMAC {
+          StatusPill(title: L("interface.using_hardware", "Hardware MAC"), systemImage: "exclamationmark.shield", tint: .orange)
         }
       }
     }
   }
 
-  private var compactDetails: some View {
-    HStack(alignment: .lastTextBaseline) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(L("interface.current_mac", "Current MAC"))
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        Text(macText(interface.currentMAC))
-          .font(.system(.body, design: .monospaced, weight: .medium))
-          .textSelection(.enabled)
-      }
-      Spacer()
-      if usesHardwareMAC {
-        StatusPill(
-          title: L("interface.using_hardware", "Using hardware MAC"),
-          systemImage: "exclamationmark.shield",
-          tint: .orange
-        )
-      }
-    }
-  }
-
-  private var detailedMACs: some View {
+  private var addresses: some View {
     HStack(alignment: .top, spacing: 28) {
-      MACValue(label: L("interface.current_mac", "Current MAC"), value: macText(interface.currentMAC), prominent: true)
-      MACValue(label: L("interface.hardware_mac", "Hardware MAC"), value: macText(interface.hardwareMAC))
+      AddressValue(label: L("interface.current_mac", "Current MAC"), address: interface.currentMAC, prominent: true)
+      if !compact {
+        AddressValue(label: L("interface.hardware_mac", "Hardware MAC"), address: interface.hardwareMAC, prominent: false)
+      }
       Spacer()
-      if usesHardwareMAC {
-        StatusPill(
-          title: L("interface.using_hardware", "Using hardware MAC"),
-          systemImage: "exclamationmark.shield",
-          tint: .orange
-        )
-      }
     }
   }
 
   @ViewBuilder
-  private var operationDetails: some View {
-    if let operation = interface.lastOperation {
-      HStack(alignment: .top, spacing: 8) {
-        StatusPill(
-          title: operationStateText(operation.state),
-          systemImage: operation.state == .succeeded ? "checkmark.circle.fill" : "clock",
-          tint: operationStateColor(operation.state)
+  private var status: some View {
+    if model.isBusy(interface) {
+      Label(
+        interface.isWiFiAssociated || interface.lastOperation?.disconnectedWiFi == true
+          ? L("interface.working_wifi", "Changing the address; Wi-Fi reconnects afterwards…")
+          : L("interface.working", "Changing the address…"),
+        systemImage: "hourglass"
+      )
+      .font(.callout)
+      .foregroundStyle(.blue)
+    } else if let operation = interface.lastOperation {
+      OperationLine(operation: operation)
+    }
+    if let pending = interface.pendingRotation {
+      HStack(spacing: 6) {
+        Label(
+          pending.waitingReason.map { "\(triggerText(pending.trigger)) — \(waitReasonText($0))" } ?? triggerText(pending.trigger),
+          systemImage: "clock.badge"
         )
-        VStack(alignment: .leading, spacing: 2) {
-          Text(operationText(operation.kind))
-            .font(.caption)
-          Text(dateTimeText(operation.completedAt ?? operation.startedAt))
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-          if let message = operation.message, !message.isEmpty {
-            Text(message)
-              .font(.caption)
-              .foregroundStyle(operation.state == .failed ? .red : .secondary)
-          }
-        }
+        .font(.callout)
+        .foregroundStyle(.orange)
+        Button(L("pending.cancel", "Cancel")) { model.cancelPending(interface) }
+          .buttonStyle(.link)
+          .font(.callout)
       }
     }
-
-    if let error = interface.errorMessage, !error.isEmpty {
-      Label(error, systemImage: "exclamationmark.triangle.fill")
-        .font(.caption)
-        .foregroundStyle(.red)
+    if let notice = interface.notice {
+      Label(noticeText(notice), systemImage: "exclamationmark.triangle.fill")
+        .font(.callout)
+        .foregroundStyle(.orange)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 
   @ViewBuilder
-  private var historyDetails: some View {
+  private var history: some View {
     if !interface.history.entries.isEmpty {
-      DisclosureGroup {
+      DisclosureGroup(L("history.disclosure", "History (%1$d of %2$d)", interface.history.entries.count, HistoryLedger.limit)) {
         VStack(spacing: 0) {
           ForEach(interface.history.entries) { entry in
             HStack(spacing: 10) {
@@ -254,97 +162,131 @@ struct InterfaceStatusCard: View {
                   .foregroundStyle(.secondary)
               }
               Spacer()
-              Button {
-                copyToPasteboard(entry.address.stringValue)
-              } label: {
-                Image(systemName: "doc.on.doc")
-              }
-              .buttonStyle(.borderless)
-              .help(L("history.copy", "Copy this address"))
-
-              Button(role: .destructive) {
-                model.removeHistory(interfaceID: interface.id, address: entry.address)
-              } label: {
+              Button { copyToPasteboard(entry.address.stringValue) } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(.borderless)
+                .help(L("history.copy", "Copy this address"))
+              Button(role: .destructive) { model.removeHistory(interface, address: entry.address) } label: {
                 Image(systemName: "trash")
               }
               .buttonStyle(.borderless)
               .help(L("history.delete", "Delete this history entry"))
+              .disabled(!model.isReady)
             }
-            .padding(.vertical, 7)
-
-            if entry.id != interface.history.entries.last?.id {
-              Divider()
-            }
+            .padding(.vertical, 6)
+            Divider()
           }
-
           HStack {
             Spacer()
-            Button(L("history.clear.action", "Clear History"), role: .destructive) {
-              confirmsClearHistory = true
-            }
-            .buttonStyle(.borderless)
-            .padding(.top, 7)
+            Button(L("history.clear.action", "Clear History"), role: .destructive) { confirmsClearHistory = true }
+              .buttonStyle(.borderless)
+              .disabled(!model.isReady)
           }
+          .padding(.top, 6)
         }
-        .padding(.top, 6)
-      } label: {
-        Text(String(
-          format: L("history.disclosure.count_format", "History (%d of 20)"),
-          interface.history.entries.count
-        ))
-        .font(.subheadline.weight(.medium))
+        .padding(.top, 4)
       }
+      .font(.subheadline)
     }
   }
 
-  private var actions: some View {
+  private var buttons: some View {
     HStack(spacing: 10) {
-      Button(L("interface.action.copy", "Copy current MAC"), action: onCopy)
+      Button(L("interface.action.copy", "Copy current MAC")) { copy(interface.currentMAC) }
         .disabled(interface.currentMAC == nil)
-
-      Button(L("interface.action.randomize", "Randomize now"), action: onRandomize)
-        .buttonStyle(.borderedProminent)
-        .disabled(interface.kind == .other || operationInProgress)
-
-      Button(L("interface.action.restore", "Restore…"), action: onRestore)
-        .disabled(operationInProgress)
-
-      if !compact {
-        Menu {
-          Button(L("policy.action.random", "Use random policy")) {
-            model.setPolicy(interfaceID: interface.id, policy: .random)
+      if interface.kind.isSupported {
+        Button(L("interface.action.randomize", "Randomize now")) { actions.randomize(interface) }
+          .buttonStyle(.borderedProminent)
+          .disabled(blockedReason != nil)
+        Button(L("interface.action.restore", "Restore…")) { actions.restore(interface) }
+          .disabled(!model.isReady || model.isBusy(interface))
+        if !compact {
+          Menu {
+            Button(L("policy.action.random", "Rotate automatically (random policy)")) { model.setPolicy(interface, .random) }
+              .disabled(interface.policy == .random)
+            Button(L("policy.action.system_managed", "Stop managing (hand off to macOS)")) { model.setPolicy(interface, .systemManaged) }
+              .disabled(interface.policy == .systemManaged)
+          } label: {
+            Label(L("policy.action.menu", "Policy"), systemImage: "slider.horizontal.3")
           }
-          Button(L("policy.action.system_managed", "Hand off to macOS…"), action: onRestore)
-        } label: {
-          Label(L("policy.action.menu", "Policy"), systemImage: "slider.horizontal.3")
+          .fixedSize()
+          .disabled(!model.isReady || model.isBusy(interface))
         }
-        .disabled(interface.kind == .other || operationInProgress)
       }
-
       Spacer()
-
-      if interface.isActive || interface.isDefaultRoute {
+      if let blockedReason, interface.kind.isSupported {
+        Text(blockedReason).font(.caption).foregroundStyle(.secondary)
+      } else if interface.isWiFiAssociated {
+        Label(L("interface.wifi_notice", "Changing it disconnects Wi-Fi briefly"), systemImage: "wifi.exclamationmark")
+          .font(.caption)
+          .foregroundStyle(.orange)
+      } else if interface.isInUse {
         Label(L("interface.disruption_notice", "Changes require confirmation"), systemImage: "exclamationmark.triangle")
           .font(.caption)
           .foregroundStyle(.orange)
       }
     }
   }
+
+  private var symbol: String {
+    switch interface.kind {
+    case .wifi: "wifi"
+    case .ethernet: "cable.connector.horizontal"
+    case .other: "network"
+    }
+  }
+
+  private func copy(_ address: MACAddress?) {
+    if let address { copyToPasteboard(address.stringValue) }
+  }
 }
 
-private struct MACValue: View {
+private struct AddressValue: View {
   let label: String
-  let value: String
-  var prominent = false
+  let address: MACAddress?
+  let prominent: Bool
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(label)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-      Text(value)
+    VStack(alignment: .leading, spacing: 3) {
+      Text(label).font(.caption).foregroundStyle(.secondary)
+      Text(macText(address))
         .font(.system(prominent ? .title3 : .body, design: .monospaced, weight: prominent ? .semibold : .regular))
         .textSelection(.enabled)
+    }
+  }
+}
+
+private struct OperationLine: View {
+  let operation: OperationRecord
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 3) {
+      HStack(spacing: 8) {
+        StatusPill(title: operationStateText(operation.state), systemImage: symbol, tint: tint)
+        Text(operationText(operation.kind)).font(.caption)
+        Text(dateTimeText(operation.finishedAt ?? operation.startedAt)).font(.caption2).foregroundStyle(.secondary)
+      }
+      if let error = operation.error {
+        Text(error.localizedMessage)
+          .font(.caption)
+          .foregroundStyle(.red)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+
+  private var symbol: String {
+    switch operation.state {
+    case .running: "hourglass"
+    case .succeeded: "checkmark.circle.fill"
+    case .failed: "xmark.octagon.fill"
+    }
+  }
+
+  private var tint: Color {
+    switch operation.state {
+    case .running: .blue
+    case .succeeded: .green
+    case .failed: .red
     }
   }
 }

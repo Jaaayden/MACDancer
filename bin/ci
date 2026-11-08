@@ -1,0 +1,21 @@
+#!/bin/zsh
+# What CI runs: compile the app and daemon (unsigned) and run the core tests,
+# sharing one DerivedData so Shared sources and module caches are reused.
+
+set -euo pipefail
+
+project_root="${0:A:h:h}"
+export DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-${RUNNER_TEMP:-${TMPDIR:-/private/tmp}}/MACDancer-CI-DerivedData}"
+
+xcodebuild build \
+  -project "${project_root}/MACDancer.xcodeproj" \
+  -scheme MACDancer \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  -derivedDataPath "${DERIVED_DATA_PATH}" \
+  -quiet \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGN_IDENTITY=""
+
+exec "${project_root}/bin/safe-test" -quiet
