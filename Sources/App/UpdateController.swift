@@ -110,7 +110,7 @@ final class UpdateController: ObservableObject {
 
   // MARK: - Steps
 
-  private func download(_ update: AvailableUpdate, into directory: URL) async throws -> URL {
+  func download(_ update: AvailableUpdate, into directory: URL) async throws -> URL {
     let destination = directory.appendingPathComponent("update.zip")
     let (bytes, response) = try await URLSession.shared.bytes(from: update.downloadURL)
     guard (response as? HTTPURLResponse)?.statusCode == 200 else {
@@ -146,7 +146,7 @@ final class UpdateController: ObservableObject {
 
   /// Unzips with ditto (keeps signatures intact) and checks the signature,
   /// bundle identifier, team and version of the app inside.
-  private nonisolated static func unpackAndVerify(
+  nonisolated static func unpackAndVerify(
     _ archive: URL, in directory: URL, expectedVersion: String, teamIdentifier: String
   ) async throws -> URL {
     try await Task.detached(priority: .userInitiated) {
@@ -181,10 +181,10 @@ final class UpdateController: ObservableObject {
     }.value
   }
 
-  /// Swaps the bundle on disk. The running process keeps its open files, so
+  /// Swaps the bundle on disk (the running app by default). The running process keeps its open files, so
   /// this is safe; the new version starts on relaunch.
-  private static func replaceRunningApp(with newApp: URL) throws {
-    _ = try FileManager.default.replaceItemAt(Bundle.main.bundleURL, withItemAt: newApp)
+  static func replaceRunningApp(with newApp: URL, at location: URL = Bundle.main.bundleURL) throws {
+    _ = try FileManager.default.replaceItemAt(location, withItemAt: newApp)
   }
 
   /// Starts the new copy once this process has exited, then quits.
