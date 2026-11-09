@@ -6,7 +6,8 @@ struct MACDancerApp: App {
   @StateObject private var model = AppModel(
     client: DaemonClient(),
     service: ServiceController(),
-    reader: BackgroundInterfaceReader(reader: SystemInterfaceReader())
+    reader: BackgroundInterfaceReader(reader: SystemInterfaceReader()),
+    remover: SystemAppRemover()
   )
   @StateObject private var updates = UpdateController()
   @AppStorage(menuBarIconPreferenceKey) private var showMenuBarIcon = true
@@ -27,38 +28,23 @@ struct MACDancerApp: App {
           model.refresh()
         }
     }
-    .defaultSize(width: 1_000, height: 700)
+    .windowStyle(.hiddenTitleBar)
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 780, height: 680)
     .commands { AppCommands(model: model, updates: updates) }
 
+    Settings {
+      SettingsView()
+        .environmentObject(model)
+        .environmentObject(updates)
+        .task { model.start() }
+    }
+
     MenuBarExtra(L("menu_bar.title", "MACDancer"), systemImage: "shuffle.circle.fill", isInserted: $showMenuBarIcon) {
-      MenuBarContent()
+      MenuBarPanel()
         .environmentObject(model)
     }
-  }
-}
-
-private struct MenuBarContent: View {
-  @EnvironmentObject private var model: AppModel
-  @Environment(\.openWindow) private var openWindow
-
-  var body: some View {
-    ForEach(model.visibleInterfaces.filter(\.kind.isSupported)) { interface in
-      Text("\(interface.displayName) · \(macText(interface.currentMAC))")
-    }
-    Divider()
-    Button(L("menu_bar.open", "Open MACDancer")) { show(.dashboard) }
-    Button(L("menu_bar.refresh", "Refresh MAC addresses")) { model.refresh() }
-      .disabled(model.isRefreshing)
-    Button(L("menu_bar.settings", "Settings…")) { show(.settings) }
-    Divider()
-    Button(L("menu_bar.quit", "Quit MACDancer")) { NSApplication.shared.terminate(nil) }
-  }
-
-  private func show(_ section: AppSection) {
-    model.selection = section
-    model.start()
-    openWindow(id: mainWindowID)
-    NSApplication.shared.activate()
+    .menuBarExtraStyle(.window)
   }
 }
 
@@ -72,12 +58,10 @@ private struct AppCommands: Commands {
 
     CommandGroup(after: .appInfo) {
       Button(L("command.check_updates", "Check for Updates…")) {
+        openWindow(id: mainWindowID)
         updates.check(userInitiated: true)
-        show(.settings)
       }
       .disabled(updates.isBusy)
-      Button(L("command.open_settings", "Settings…")) { show(.settings) }
-        .keyboardShortcut(",", modifiers: .command)
     }
 
     CommandGroup(after: .toolbar) {
@@ -85,17 +69,5 @@ private struct AppCommands: Commands {
         .keyboardShortcut("r", modifiers: .command)
         .disabled(model.isRefreshing)
     }
-
-    CommandMenu(L("command.navigate", "Navigate")) {
-      ForEach(Array(AppSection.allCases.enumerated()), id: \.element) { index, section in
-        Button(sectionTitle(section)) { show(section) }
-          .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
-      }
-    }
-  }
-
-  private func show(_ section: AppSection) {
-    model.selection = section
-    openWindow(id: mainWindowID)
   }
 }

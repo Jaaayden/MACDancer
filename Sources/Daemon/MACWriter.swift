@@ -1,9 +1,21 @@
 import Foundation
 
+/// A Wi-Fi network to rejoin after the MAC change. `ssid` is nil when macOS
+/// does not reveal the network name to the daemon.
+struct WiFiNetwork: Equatable, Sendable {
+  var ssid: Data?
+}
+
 protocol WiFiControlling: Sendable {
   func isAssociated(_ interfaceName: String) -> Bool
-  /// Leaves the current network. macOS rejoins known networks by itself.
+  /// The network the interface is on now, read before leaving it.
+  func currentNetwork(_ interfaceName: String) -> WiFiNetwork
+  /// Leaves the current network. macOS treats this like the user choosing
+  /// "Disconnect" and does not rejoin by itself, so `rejoin` must follow.
   func leaveNetwork(_ interfaceName: String)
+  /// Joins `network` again, or the first preferred network in range when its
+  /// name is unknown. Blocking; returns false when no join could be started.
+  func rejoin(_ interfaceName: String, network: WiFiNetwork) -> Bool
 }
 
 protocol MACWriting: Sendable {
@@ -15,6 +27,10 @@ struct MACWriteOutcome: Equatable, Sendable {
   var observed: MACAddress?
   var error: MACDancerError?
   var disconnectedWiFi = false
+  /// Set only when Wi-Fi was disconnected: whether it came back afterwards.
+  var rejoinedWiFi: Bool?
+  /// The address after rejoining, when macOS replaced ours while joining.
+  var replacedOnRejoin: MACAddress?
 
   var succeeded: Bool { error == nil }
 }
@@ -27,6 +43,7 @@ struct MACWriter: MACWriting {
   let reader: InterfaceReading
   var sleep: @Sendable (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
   var commandTimeout: TimeInterval = 10
+  var rejoinTimeout: TimeInterval = 20
 
   func write(_ target: MACAddress, to interface: InterfaceSnapshot, disconnectWiFi: Bool) -> MACWriteOutcome {
     let name = interface.bsdName
@@ -34,9 +51,14 @@ struct MACWriter: MACWriting {
     var outcome = MACWriteOutcome()
 
     // Wi-Fi drivers reject a new address while associated.
+    var previousNetwork: WiFiNetwork?
     if interface.kind == .wifi && wifi.isAssociated(name) {
       guard disconnectWiFi else { return MACWriteOutcome(error: .confirmationRequired) }
-      Log.daemon.info("Disconnecting Wi-Fi on \(name, privacy: .public) before the MAC change")
+      let network = wifi.currentNetwork(name)
+      previousNetwork = network
+      Log.daemon.notice(
+        "Disconnecting Wi-Fi on \(name, privacy: .public) before the MAC change (network name known: \(network.ssid != nil))"
+      )
       wifi.leaveNetwork(name)
       outcome.disconnectedWiFi = true
       guard poll(timeout: 5, { !wifi.isAssociated(name) }) else {
@@ -45,27 +67,49 @@ struct MACWriter: MACWriting {
       }
     }
 
+    apply(target, to: name, &outcome)
+
+    // Rejoin whether or not the write worked: the user never asked to stay offline.
+    if let previousNetwork {
+      rejoin(name, previousNetwork, target: target, &outcome)
+    }
+    return outcome
+  }
+
+  private func apply(_ target: MACAddress, to name: String, _ outcome: inout MACWriteOutcome) {
     do {
       let result = try runner.run("/sbin/ifconfig", [name, "ether", target.stringValue], timeout: commandTimeout)
       let message = result.error.trimmingCharacters(in: .whitespacesAndNewlines)
       guard result.exitCode == 0 else {
         outcome.error = .commandFailed(message.isEmpty ? "ifconfig exited with status \(result.exitCode)" : message)
-        return outcome
+        return
       }
     } catch {
       outcome.error = MACDancerError.commandFailed(MACDancerError(error).message)
-      return outcome
+      return
     }
 
     // Some drivers publish the new address a moment after ifconfig returns.
+    var observed: MACAddress?
     _ = poll(timeout: 2) {
-      outcome.observed = currentMAC(of: name)
-      return outcome.observed == target
+      observed = currentMAC(of: name)
+      return observed == target
     }
-    if outcome.observed != target {
-      outcome.error = .readbackMismatch(expected: target, observed: outcome.observed)
+    outcome.observed = observed
+    if observed != target {
+      outcome.error = .readbackMismatch(expected: target, observed: observed)
     }
-    return outcome
+  }
+
+  private func rejoin(_ name: String, _ network: WiFiNetwork, target: MACAddress, _ outcome: inout MACWriteOutcome) {
+    let started = wifi.rejoin(name, network: network)
+    let joined = started && poll(timeout: rejoinTimeout) { wifi.isAssociated(name) }
+    outcome.rejoinedWiFi = joined
+    Log.daemon.notice("Rejoining Wi-Fi on \(name, privacy: .public): \(joined ? "connected" : "failed", privacy: .public)")
+    // Private Wi-Fi Address can swap our address while joining.
+    if joined, outcome.succeeded, let after = currentMAC(of: name), after != target {
+      outcome.replacedOnRejoin = after
+    }
   }
 
   private func currentMAC(of name: String) -> MACAddress? {

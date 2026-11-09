@@ -37,6 +37,8 @@ protocol ConfigurationStoring: AnyObject {
   /// aside and reported through `warning`.
   func load() -> (document: ConfigurationDocument, warning: String?)
   func save(_ document: ConfigurationDocument) throws
+  /// Deletes the stored configuration and its directory.
+  func erase() throws
 }
 
 /// Stores the document as JSON in a root-only directory, replaced atomically.
@@ -53,6 +55,18 @@ final class ConfigurationStore: ConfigurationStoring {
   init(fileURL: URL = ConfigurationStore.defaultFileURL) {
     self.fileURL = fileURL
     enforceRootOwnership = fileURL == Self.defaultFileURL
+  }
+
+  func erase() throws {
+    do {
+      try FileManager.default.removeItem(atPath: directoryPath)
+    } catch CocoaError.fileNoSuchFile {
+      return
+    } catch let error as NSError where error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT) {
+      return
+    } catch {
+      throw MACDancerError.persistence("Could not delete \(directoryPath): \(error.localizedDescription)")
+    }
   }
 
   private struct Envelope: Codable {

@@ -50,6 +50,8 @@ let watcher = ExecutableWatcher()
 let version = appBundleVersion(executablePath: watcher.path)
 Log.daemon.notice("MACDancer daemon \(version ?? "?", privacy: .public) starting (protocol \(MACDancerConstants.protocolVersion))")
 
+WiFiController.logDiagnostics()
+
 let legacyCache = LegacyServiceCache()
 legacyCache.refresh()
 
@@ -90,9 +92,9 @@ legacyTimer.schedule(deadline: .now() + 600, repeating: 600, leeway: .seconds(30
 legacyTimer.setEventHandler { legacyCache.refresh() }
 legacyTimer.resume()
 
-// Checked every 10 s (a single stat call). Waits for any running MAC write.
+// Checked every 2 s (a single stat call). Waits for any running MAC write.
 let updateTimer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-updateTimer.schedule(deadline: .now() + 10, repeating: 10, leeway: .seconds(2))
+updateTimer.schedule(deadline: .now() + 2, repeating: 2, leeway: .milliseconds(500))
 updateTimer.setEventHandler {
   guard watcher.wasReplaced else { return }
   coordinator.whenIdle {

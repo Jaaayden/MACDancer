@@ -68,6 +68,14 @@ final class ConfigurationStoreTests: XCTestCase {
     XCTAssertNoThrow(try ConfigurationStore(fileURL: fileURL).save(ConfigurationDocument()))
   }
 
+  func testEraseRemovesTheDirectory() throws {
+    let store = ConfigurationStore(fileURL: fileURL)
+    try store.save(ConfigurationDocument(automation: .init(rotateAfterWake: true)))
+    try store.erase()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    XCTAssertNoThrow(try store.erase(), "erasing twice is fine")
+  }
+
   func testSymlinkIsNeitherFollowedOnReadNorWrittenThrough() throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let victim = directory.appendingPathComponent("victim.txt")
@@ -133,6 +141,49 @@ final class MACWriterTests: XCTestCase {
     XCTAssertTrue(outcome.succeeded)
     XCTAssertTrue(outcome.disconnectedWiFi)
     XCTAssertEqual(wifi.leaveCount, 1)
+    XCTAssertEqual(wifi.rejoined, [WiFiNetwork(ssid: Data("home".utf8))], "rejoins the network it left")
+    XCTAssertEqual(outcome.rejoinedWiFi, true)
+    XCTAssertTrue(wifi.associated)
+  }
+
+  func testWiFiIsRejoinedEvenWhenTheWriteFails() {
+    let system = FakeReaderSystem(makeInterface("en0", kind: .wifi, wifiAssociated: true))
+    let wifi = FakeWiFi(associated: true)
+    let runner = RecordingRunner(exitCode: 1, error: "rejected")
+    let outcome = writer(system, runner: runner, wifi: wifi).write(target, to: system.interface, disconnectWiFi: true)
+    XCTAssertEqual(outcome.error, .commandFailed("rejected"))
+    XCTAssertEqual(wifi.rejoined.count, 1)
+    XCTAssertTrue(wifi.associated)
+  }
+
+  func testFailedRejoinIsReported() {
+    let system = FakeReaderSystem(makeInterface("en0", kind: .wifi, wifiAssociated: true))
+    let wifi = FakeWiFi(associated: true, rejoinWorks: false)
+    let runner = RecordingRunner { arguments in system.current = MACAddress(arguments[2]) }
+    let outcome = writer(system, runner: runner, wifi: wifi).write(target, to: system.interface, disconnectWiFi: true)
+    XCTAssertTrue(outcome.succeeded, "the address itself was applied")
+    XCTAssertEqual(outcome.rejoinedWiFi, false)
+  }
+
+  func testAddressReplacedWhileRejoiningIsReported() {
+    let system = FakeReaderSystem(makeInterface("en0", kind: .wifi, wifiAssociated: true))
+    let wifi = FakeWiFi(associated: true)
+    wifi.onRejoin = { system.current = mac("fe:00:00:00:00:42") }
+    let runner = RecordingRunner { arguments in system.current = MACAddress(arguments[2]) }
+    let outcome = writer(system, runner: runner, wifi: wifi).write(target, to: system.interface, disconnectWiFi: true)
+    XCTAssertTrue(outcome.succeeded)
+    XCTAssertEqual(outcome.replacedOnRejoin, mac("fe:00:00:00:00:42"))
+  }
+
+  func testEthernetNeverTouchesWiFi() {
+    let system = FakeReaderSystem(makeInterface("en5", active: true))
+    let wifi = FakeWiFi(associated: true)
+    let runner = RecordingRunner { arguments in system.current = MACAddress(arguments[2]) }
+    let outcome = writer(system, runner: runner, wifi: wifi).write(target, to: system.interface, disconnectWiFi: true)
+    XCTAssertTrue(outcome.succeeded)
+    XCTAssertEqual(wifi.leaveCount, 0)
+    XCTAssertTrue(wifi.rejoined.isEmpty)
+    XCTAssertNil(outcome.rejoinedWiFi)
   }
 
   func testWiFiThatWillNotDisconnectIsNotWritten() {
@@ -181,17 +232,32 @@ private final class RecordingRunner: CommandRunning, @unchecked Sendable {
 private final class FakeWiFi: WiFiControlling, @unchecked Sendable {
   var associated: Bool
   let staysAssociated: Bool
+  let rejoinWorks: Bool
+  var onRejoin: () -> Void = {}
   private(set) var leaveCount = 0
+  private(set) var rejoined: [WiFiNetwork] = []
 
-  init(associated: Bool = false, staysAssociated: Bool = false) {
+  init(associated: Bool = false, staysAssociated: Bool = false, rejoinWorks: Bool = true) {
     self.associated = associated
     self.staysAssociated = staysAssociated
+    self.rejoinWorks = rejoinWorks
   }
 
   func isAssociated(_ interfaceName: String) -> Bool { associated }
+
+  func currentNetwork(_ interfaceName: String) -> WiFiNetwork { WiFiNetwork(ssid: Data("home".utf8)) }
 
   func leaveNetwork(_ interfaceName: String) {
     leaveCount += 1
     if !staysAssociated { associated = false }
   }
+
+  func rejoin(_ interfaceName: String, network: WiFiNetwork) -> Bool {
+    rejoined.append(network)
+    guard rejoinWorks else { return false }
+    associated = true
+    onRejoin()
+    return true
+  }
 }
+

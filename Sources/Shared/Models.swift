@@ -127,6 +127,8 @@ struct PendingRotation: Codable, Equatable, Sendable {
 enum InterfaceNotice: Codable, Equatable, Sendable {
   /// macOS rejoined Wi-Fi with its own (Private Wi-Fi) address.
   case addressReplacedAfterReconnect(applied: MACAddress, current: MACAddress)
+  /// Wi-Fi was disconnected for the change and could not be rejoined.
+  case wifiNotRejoined
 }
 
 struct AutomationSettings: Codable, Equatable, Sendable {
@@ -242,6 +244,9 @@ enum DaemonRequest: Codable, Equatable, Sendable {
   /// `nil` cancels pending rotations on every interface.
   case cancelPending(interfaceID: String?)
   case updateAutomation(AutomationSettings)
+  /// Stops all automation and deletes everything the daemon stored, before
+  /// the app unregisters it. Nothing is written afterwards.
+  case prepareUninstall
 
   /// Requests that may write a MAC address and therefore take a while.
   var mayWriteAddress: Bool {

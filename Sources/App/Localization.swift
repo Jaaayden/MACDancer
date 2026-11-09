@@ -24,6 +24,15 @@ enum Localizer {
     lock.withLock { bundle = next }
   }
 
+  /// The locale matching the chosen language, for dates.
+  static var locale: Locale {
+    switch storedLanguage {
+    case .system: .autoupdatingCurrent
+    case .english: Locale(identifier: "en")
+    case .simplifiedChinese: Locale(identifier: "zh-Hans")
+    }
+  }
+
   static func string(_ key: String, _ fallback: String) -> String {
     lock.withLock { bundle }?.localizedString(forKey: key, value: fallback, table: nil) ?? fallback
   }
@@ -161,10 +170,24 @@ func noticeText(_ notice: InterfaceNotice) -> String {
       "After Wi-Fi reconnected, macOS replaced %1$@ with %2$@. Turn off Private Wi-Fi Address for this network in System Settings to keep your own address.",
       applied.stringValue, current.stringValue
     )
+  case .wifiNotRejoined:
+    L(
+      "notice.wifi_rejoin_manually",
+      "The address is changed. Wi-Fi is disconnected: choose your network in the Wi-Fi menu to join it again."
+    )
   }
 }
 
 func dateTimeText(_ date: Date?) -> String {
   guard let date else { return L("time.never", "Never") }
-  return date.formatted(date: .abbreviated, time: .shortened)
+  return date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Localizer.locale))
+}
+
+/// "2 minutes ago", in the app's language.
+func relativeText(_ date: Date, now: Date = Date()) -> String {
+  if now.timeIntervalSince(date) < 45 { return L("time.just_now", "just now") }
+  let formatter = RelativeDateTimeFormatter()
+  formatter.locale = Localizer.locale
+  formatter.unitsStyle = .full
+  return formatter.localizedString(for: date, relativeTo: now)
 }

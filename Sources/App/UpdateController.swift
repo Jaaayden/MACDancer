@@ -14,6 +14,8 @@ final class UpdateController: ObservableObject {
   static let lastCheckKey = "lastUpdateCheck"
 
   @Published private(set) var state: UpdateState = .idle
+  /// Results of a check the user asked for are shown; background ones only when an update exists.
+  @Published private(set) var lastCheckWasManual = false
   @Published var automaticallyChecks: Bool {
     didSet { UserDefaults.standard.set(automaticallyChecks, forKey: Self.autoCheckKey) }
   }
@@ -53,12 +55,13 @@ final class UpdateController: ObservableObject {
   func check(userInitiated: Bool) {
     guard !isBusy else { return }
     state = .checking
+    lastCheckWasManual = userInitiated
     Task {
       do {
         var request = URLRequest(url: UpdatePlanner.latestReleaseURL, timeoutInterval: 20)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("MACDancer/\(currentVersion)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FileDownloader.session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         UserDefaults.standard.set(Date(), forKey: Self.lastCheckKey)
         if status == 404 {
@@ -79,8 +82,17 @@ final class UpdateController: ObservableObject {
     }
   }
 
+  /// Hides a finished manual check ("up to date" or an error).
+  func dismissResult() {
+    switch state {
+    case .upToDate, .failed: state = .idle
+    default: break
+    }
+  }
+
   func install(_ update: AvailableUpdate) {
     guard !isBusy else { return }
+    lastCheckWasManual = true
     if let reason = installBlockedReason {
       state = .failed(reason)
       return
@@ -110,37 +122,17 @@ final class UpdateController: ObservableObject {
 
   // MARK: - Steps
 
+  /// Downloads with a plain download task on a background queue. (It used to
+  /// iterate the response byte by byte on the main actor, which made a 4 MB
+  /// update take many seconds and stall the window.)
   func download(_ update: AvailableUpdate, into directory: URL) async throws -> URL {
     let destination = directory.appendingPathComponent("update.zip")
-    let (bytes, response) = try await URLSession.shared.bytes(from: update.downloadURL)
-    guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-      throw UpdateError.http((response as? HTTPURLResponse)?.statusCode ?? 0)
-    }
-    let expected = max(response.expectedContentLength, Int64(update.size))
-    FileManager.default.createFile(atPath: destination.path, contents: nil)
-    let handle = try FileHandle(forWritingTo: destination)
-    defer { try? handle.close() }
-
-    var buffer = Data()
-    buffer.reserveCapacity(1 << 16)
-    var received: Int64 = 0
-    var lastReported = 0.0
-    for try await byte in bytes {
-      buffer.append(byte)
-      if buffer.count >= 1 << 16 {
-        try handle.write(contentsOf: buffer)
-        received += Int64(buffer.count)
-        buffer.removeAll(keepingCapacity: true)
-        if expected > 0 {
-          let progress = min(Double(received) / Double(expected), 1)
-          if progress - lastReported >= 0.01 {
-            lastReported = progress
-            state = .downloading(progress)
-          }
-        }
+    try await FileDownloader.download(update.downloadURL, to: destination, expectedSize: Int64(update.size)) { progress in
+      Task { @MainActor [weak self] in
+        guard let self, case .downloading = self.state else { return }
+        self.state = .downloading(progress)
       }
     }
-    try handle.write(contentsOf: buffer)
     return destination
   }
 
@@ -205,6 +197,78 @@ final class UpdateController: ObservableObject {
   private static func describe(_ error: Error) -> String {
     if let error = error as? UpdateError { return error.message }
     return error.localizedDescription
+  }
+}
+
+/// One download with progress. Uses an ephemeral session so nothing is
+/// cached or stored under ~/Library for MACDancer.
+private final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+  static let session = URLSession(configuration: .ephemeral)
+
+  private let destination: URL
+  private let expectedSize: Int64
+  private let progress: @Sendable (Double) -> Void
+  private var continuation: CheckedContinuation<Void, Error>?
+  private var lastReported = 0.0
+  private var moveError: Error?
+
+  private init(destination: URL, expectedSize: Int64, progress: @escaping @Sendable (Double) -> Void) {
+    self.destination = destination
+    self.expectedSize = expectedSize
+    self.progress = progress
+  }
+
+  static func download(
+    _ url: URL, to destination: URL, expectedSize: Int64, progress: @escaping @Sendable (Double) -> Void
+  ) async throws {
+    let delegate = FileDownloader(destination: destination, expectedSize: expectedSize, progress: progress)
+    let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+    defer { session.finishTasksAndInvalidate() }
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        delegate.continuation = continuation
+        session.downloadTask(with: url).resume()
+      }
+    } onCancel: {
+      session.invalidateAndCancel()
+    }
+  }
+
+  func urlSession(
+    _ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
+  ) {
+    let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : expectedSize
+    guard total > 0 else { return }
+    let fraction = min(Double(totalBytesWritten) / Double(total), 1)
+    if fraction - lastReported >= 0.02 || fraction == 1 {
+      lastReported = fraction
+      progress(fraction)
+    }
+  }
+
+  func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    // The temporary file is deleted when this method returns.
+    let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
+    guard status == 200 else {
+      moveError = UpdateError.http(status)
+      return
+    }
+    do {
+      try? FileManager.default.removeItem(at: destination)
+      try FileManager.default.moveItem(at: location, to: destination)
+    } catch {
+      moveError = error
+    }
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    if let error = error ?? moveError {
+      continuation?.resume(throwing: error)
+    } else {
+      continuation?.resume()
+    }
+    continuation = nil
   }
 }
 

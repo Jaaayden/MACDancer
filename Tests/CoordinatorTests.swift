@@ -58,6 +58,49 @@ final class CoordinatorTests: XCTestCase {
     XCTAssertEqual(notice, .addressReplacedAfterReconnect(applied: generated, current: mac("fe:00:00:00:00:99")))
   }
 
+  func testUserIsToldWhenWiFiDoesNotComeBack() throws {
+    let system = FakeSystem([makeInterface("en0", kind: .wifi, hardware: "a0:b1:c2:00:00:01", wifiAssociated: true)])
+    system.rejoinFails = true
+    let coordinator = makeCoordinator(system)
+    let result = try send(coordinator, .randomize(interfaceID: "en0", confirmedDisruption: true)).get()
+    XCTAssertEqual(interface(result, "en0").notice, .wifiNotRejoined)
+    XCTAssertEqual(interface(result, "en0").lastOperation?.state, .succeeded)
+
+    // The app rejoins; the notice goes away on the next network change.
+    system.update("en0") { $0.isWiFiAssociated = true }
+    coordinator.handle(.networkChanged)
+    settle(coordinator)
+    XCTAssertNil(interface(snapshot(coordinator), "en0").notice)
+  }
+
+  func testRejoinWithAnotherAddressIsReported() throws {
+    let system = FakeSystem([makeInterface("en0", kind: .wifi, hardware: "a0:b1:c2:00:00:01", wifiAssociated: true)])
+    system.rejoinFails = true
+    let coordinator = makeCoordinator(system)
+    _ = try send(coordinator, .randomize(interfaceID: "en0", confirmedDisruption: true)).get()
+    system.update("en0") {
+      $0.isWiFiAssociated = true
+      $0.currentMAC = mac("fe:00:00:00:00:77")
+    }
+    coordinator.tick()
+    settle(coordinator)
+    XCTAssertEqual(
+      interface(snapshot(coordinator), "en0").notice,
+      .addressReplacedAfterReconnect(applied: generated, current: mac("fe:00:00:00:00:77"))
+    )
+  }
+
+  func testAddressSwappedWhileRejoiningIsReportedAtOnce() throws {
+    let system = FakeSystem([makeInterface("en0", kind: .wifi, hardware: "a0:b1:c2:00:00:01", wifiAssociated: true)])
+    system.replaceOnRejoin = mac("fe:00:00:00:00:42")
+    let coordinator = makeCoordinator(system)
+    let result = try send(coordinator, .randomize(interfaceID: "en0", confirmedDisruption: true)).get()
+    XCTAssertEqual(
+      interface(result, "en0").notice,
+      .addressReplacedAfterReconnect(applied: generated, current: mac("fe:00:00:00:00:42"))
+    )
+  }
+
   func testStatusIsAnsweredWhileAWriteIsRunning() throws {
     let system = FakeSystem([makeInterface("en5")])
     let gate = DispatchSemaphore(value: 0)
@@ -283,6 +326,31 @@ final class CoordinatorTests: XCTestCase {
     coordinator.handle(.networkChanged)
     settle(coordinator)
     XCTAssertEqual(system.writeCount, 1)
+  }
+
+  func testUninstallErasesEverythingAndStopsWriting() throws {
+    let system = FakeSystem([makeInterface("en5")])
+    let store = MemoryStore()
+    let coordinator = makeCoordinator(system, store: store)
+    _ = try send(coordinator, .randomize(interfaceID: "en5", confirmedDisruption: false)).get()
+    _ = try send(coordinator, .updateAutomation(.init(rotateWhenInterfaceBecomesInactive: true))).get()
+    let savesBefore = store.saves
+
+    let result = try send(coordinator, .prepareUninstall).get()
+    XCTAssertTrue(store.erased)
+    XCTAssertEqual(result.automation, AutomationSettings())
+    XCTAssertEqual(interface(result, "en5").policy, .systemManaged)
+    XCTAssertTrue(interface(result, "en5").history.entries.isEmpty)
+
+    XCTAssertEqual(
+      send(coordinator, .randomize(interfaceID: "en5", confirmedDisruption: true)),
+      .failure(.daemonUnavailable("MACDancer is being uninstalled."))
+    )
+    coordinator.handle(.networkChanged)
+    coordinator.tick()
+    settle(coordinator)
+    XCTAssertEqual(system.writeCount, 1)
+    XCTAssertEqual(store.saves, savesBefore, "nothing is written back after erasing")
   }
 
   func testTurningAutomationOffDropsPendingWork() throws {
