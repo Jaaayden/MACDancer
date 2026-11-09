@@ -3,7 +3,8 @@ import CoreGraphics
 
 // MACDancer icon: six "byte" capsules dancing on a blue-violet squircle.
 let size: CGFloat = 1024
-let cs = CGColorSpace(name: CGColorSpace.displayP3)!
+// sRGB on purpose: a Display P3 image makes the asset catalog store every size twice.
+let cs = CGColorSpace(name: CGColorSpace.sRGB)!
 let ctx = CGContext(data: nil, width: Int(size), height: Int(size), bitsPerComponent: 8, bytesPerRow: 0,
                     space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
 

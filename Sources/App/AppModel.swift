@@ -1,11 +1,6 @@
 import Combine
 import Foundation
 
-enum AppSection: String, CaseIterable, Hashable, Identifiable, Sendable {
-  case dashboard, interfaces, automation, settings
-  var id: String { rawValue }
-}
-
 /// One line the Dashboard shows about the background service.
 enum ServiceStatus: Equatable, Sendable {
   case checking
@@ -29,7 +24,6 @@ final class AppModel: ObservableObject {
   static let showAllInterfacesKey = "showAllInterfaces"
   static let autoRepairedVersionKey = "autoRepairedServiceForVersion"
 
-  @Published var selection: AppSection = .dashboard
   @Published var language: AppLanguage {
     didSet { Localizer.use(language) }
   }
@@ -47,12 +41,18 @@ final class AppModel: ObservableObject {
   @Published private(set) var lastRefreshAt: Date?
   @Published private(set) var isChangingService = false
   @Published private(set) var isUpdatingAutomation = false
+  @Published private(set) var isUninstalling = false
+  /// True once the service has been unreachable for a while, not just
+  /// restarting (for example after an update). Only then is Repair offered.
+  @Published private(set) var serviceProblemPersists = false
   /// Interfaces with a request on its way to the daemon.
   @Published private(set) var requestsInFlight: Set<String> = []
+
   @Published var alert: AppAlert?
 
   private let client: DaemonClientProviding
   private let service: ServiceControlling
+  private let remover: AppRemoving?
   private let reader: LocalInterfaceReading
   private let defaults: UserDefaults
   private var localInterfaces: [InterfaceSnapshot] = []
@@ -61,17 +61,23 @@ final class AppModel: ObservableObject {
   private let appVersion: String
   private let autoRepairDelay: Duration
   private var autoRepairTask: Task<Void, Never>?
+  private var problemTask: Task<Void, Never>?
+  private let problemGrace: Duration
 
   init(
     client: DaemonClientProviding,
     service: ServiceControlling,
     reader: LocalInterfaceReading,
+    remover: AppRemoving? = nil,
     defaults: UserDefaults = .standard,
     appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
-    autoRepairDelay: Duration = .seconds(25)
+    autoRepairDelay: Duration = .seconds(25),
+    problemGrace: Duration = .seconds(12)
   ) {
     self.client = client
     self.service = service
+    self.remover = remover
+    self.problemGrace = problemGrace
     self.reader = reader
     self.defaults = defaults
     self.appVersion = appVersion
@@ -181,9 +187,23 @@ final class AppModel: ObservableObject {
     switch state {
     case .unreachable, .incompatible:
       scheduleAutoRepair()
+      if problemTask == nil && !serviceProblemPersists {
+        problemTask = Task { [weak self, problemGrace] in
+          try? await Task.sleep(for: problemGrace)
+          guard let self, !Task.isCancelled else { return }
+          self.problemTask = nil
+          switch self.connection {
+          case .unreachable, .incompatible: self.serviceProblemPersists = true
+          default: break
+          }
+        }
+      }
     case .connected:
       autoRepairTask?.cancel()
       autoRepairTask = nil
+      problemTask?.cancel()
+      problemTask = nil
+      serviceProblemPersists = false
     case .idle, .connecting:
       break
     }
@@ -268,6 +288,35 @@ final class AppModel: ObservableObject {
         present(failureTitle, error)
       }
       updateRegistration(await service.registration())
+    }
+  }
+
+  /// Removes MACDancer completely: the daemon erases its settings, the
+  /// service is unregistered, then the app trashes itself and its
+  /// preferences and quits. MAC addresses return to the hardware ones at the
+  /// next restart (they are never written permanently).
+  func uninstallApp() {
+    guard !isUninstalling, let remover else { return }
+    isUninstalling = true
+    Task {
+      defer { isUninstalling = false }
+      do {
+        var erased = false
+        if isReady {
+          erased = (try? await client.send(.prepareUninstall)) != nil
+        }
+        client.stop()
+        if registration != .notInstalled {
+          try await service.uninstall()
+        }
+        if !erased && remover.serviceDataExists() {
+          try await remover.removeServiceDataWithPrompt()
+        }
+        try await remover.trashAppAndQuit()
+      } catch {
+        present(L("alert.uninstall_app_failed", "Could not uninstall MACDancer"), error)
+        updateRegistration(await service.registration())
+      }
     }
   }
 

@@ -5,13 +5,15 @@ final class AppModelTests: XCTestCase {
   private func makeModel(
     registration: ServiceRegistration = .enabled,
     local: [InterfaceSnapshot] = [makeInterface("en5")],
-    defaults: UserDefaults = UserDefaults(suiteName: "MACDancerTests-\(UUID().uuidString)")!
+    defaults: UserDefaults = UserDefaults(suiteName: "MACDancerTests-\(UUID().uuidString)")!,
+    remover: FakeRemover? = nil
   ) -> (AppModel, FakeClient, FakeService) {
+    let remover = remover ?? FakeRemover()
     let client = FakeClient()
     let service = FakeService(registration)
     let model = AppModel(
-      client: client, service: service, reader: FakeLocalReader(local), defaults: defaults,
-      appVersion: "2.0.0", autoRepairDelay: .milliseconds(50)
+      client: client, service: service, reader: FakeLocalReader(local), remover: remover, defaults: defaults,
+      appVersion: "2.0.0", autoRepairDelay: .milliseconds(50), problemGrace: .milliseconds(50)
     )
     return (model, client, service)
   }
@@ -36,6 +38,45 @@ final class AppModelTests: XCTestCase {
     secondClient.onConnectionChange?(.incompatible(daemonVersion: 1))
     try? await Task.sleep(for: .milliseconds(200))
     XCTAssertEqual(secondService.repairs, 0)
+  }
+
+  func testUninstallErasesThenUnregistersThenTrashes() async {
+    let remover = FakeRemover()
+    let (model, client, service) = makeModel(remover: remover)
+    model.start()
+    await waitUntil { client.started }
+    client.connect()
+    client.reply = .success(client.snapshot([], revision: 1))
+    model.uninstallApp()
+    await waitUntil { remover.trashed }
+    XCTAssertEqual(client.requests, [.prepareUninstall])
+    XCTAssertEqual(service.state, .notInstalled)
+    XCTAssertFalse(remover.promptedForPassword, "the daemon erased its own data")
+  }
+
+  func testUninstallWithoutARunningServiceAsksForThePassword() async {
+    let remover = FakeRemover()
+    remover.dataExists = true
+    let (model, client, service) = makeModel(remover: remover)
+    model.start()
+    await waitUntil { client.started }
+    client.onConnectionChange?(.unreachable("gone"))
+    model.uninstallApp()
+    await waitUntil { remover.trashed }
+    XCTAssertTrue(client.requests.isEmpty)
+    XCTAssertEqual(service.state, .notInstalled)
+    XCTAssertTrue(remover.promptedForPassword)
+  }
+
+  func testRepairIsOfferedOnlyAfterAPersistentProblem() async {
+    let (model, client, _) = makeModel()
+    model.start()
+    await waitUntil { client.started }
+    client.onConnectionChange?(.unreachable("restarting"))
+    XCTAssertFalse(model.serviceProblemPersists)
+    await waitUntil { model.serviceProblemPersists }
+    client.connect()
+    XCTAssertFalse(model.serviceProblemPersists)
   }
 
   func testShortOutageDoesNotTriggerRepair() async {
@@ -214,6 +255,19 @@ private final class FakeService: ServiceControlling {
   private(set) var repairs = 0
   func repair() async throws { repairs += 1 }
   func openApprovalSettings() {}
+}
+
+@MainActor
+final class FakeRemover: AppRemoving {
+  var dataExists = false
+  private(set) var promptedForPassword = false
+  private(set) var trashed = false
+  func serviceDataExists() -> Bool { dataExists }
+  func removeServiceDataWithPrompt() async throws {
+    promptedForPassword = true
+    dataExists = false
+  }
+  func trashAppAndQuit() async throws { trashed = true }
 }
 
 private struct FakeLocalReader: LocalInterfaceReading {

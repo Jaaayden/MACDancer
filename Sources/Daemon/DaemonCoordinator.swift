@@ -47,6 +47,8 @@ final class DaemonCoordinator: @unchecked Sendable {
   private var revision: UInt64 = 0
   private var lastPublishedContent: DaemonSnapshot?
   private var subscribers: [UUID: (DaemonSnapshot) -> Void] = [:]
+  /// Set by `prepareUninstall`: nothing is written or rotated any more.
+  private var uninstalling = false
 
   init(environment: Environment) {
     env = environment
@@ -75,6 +77,7 @@ final class DaemonCoordinator: @unchecked Sendable {
   func tick() {
     queue.async {
       self.readLocked()
+      self.resolveNoticesLocked()
       self.runPendingLocked()
       self.persistLocked()
       self.publishLocked()
@@ -111,8 +114,27 @@ final class DaemonCoordinator: @unchecked Sendable {
   // MARK: - Requests
 
   private func handleLocked(_ request: DaemonRequest, reply: @escaping Reply) {
+    if uninstalling, request != .snapshot, request != .subscribe, request != .prepareUninstall {
+      return reply(.failure(.daemonUnavailable("MACDancer is being uninstalled.")))
+    }
     switch request {
     case .snapshot, .subscribe:
+      reply(.success(snapshotLocked()))
+
+    case .prepareUninstall:
+      guard busy.isEmpty else { return reply(.failure(.interfaceBusy(busy.sorted()[0]))) }
+      uninstalling = true
+      document = ConfigurationDocument()
+      savedDocument = document
+      lastOperations.removeAll()
+      notices.removeAll()
+      do {
+        try env.store.erase()
+      } catch {
+        return reply(.failure(MACDancerError(error)))
+      }
+      Log.daemon.notice("Configuration erased for uninstall")
+      publishLocked()
       reply(.success(snapshotLocked()))
 
     case let .setPolicy(id, choice):
@@ -293,11 +315,19 @@ final class DaemonCoordinator: @unchecked Sendable {
     record.disconnectedWiFi = outcome.disconnectedWiFi
     lastOperations[key] = record
 
+    if outcome.rejoinedWiFi == false {
+      notices[key] = .wifiNotRejoined
+    } else if let replaced = outcome.replacedOnRejoin {
+      notices[key] = .addressReplacedAfterReconnect(applied: target, current: replaced)
+    }
+
     if outcome.succeeded {
       document.policies[key] = resultingPolicy
       document.pendingRotations[key] = nil
       if let source { recordHistoryLocked(target, source: source, kind: kind, interface: interface) }
-      if outcome.disconnectedWiFi { scheduleWiFiFollowUpLocked(id: id, key: key, applied: target) }
+      if outcome.rejoinedWiFi == true && outcome.replacedOnRejoin == nil {
+        scheduleWiFiFollowUpLocked(id: id, key: key, applied: target)
+      }
       Log.daemon.info("\(kind.rawValue, privacy: .public) on \(id, privacy: .public) verified")
     } else {
       // An automatic rotation is not retried in a loop; the next trigger queues it again.
@@ -327,19 +357,34 @@ final class DaemonCoordinator: @unchecked Sendable {
     document.histories[interface.deviceKey] = ledger
   }
 
-  /// macOS rejoins Wi-Fi by itself after the disconnect. If Private Wi-Fi
-  /// Address is on for that network it swaps our address for its own; tell
-  /// the user instead of leaving them guessing.
+  /// If Private Wi-Fi Address is on for the network, macOS may swap our
+  /// address for its own some time after rejoining; tell the user instead of
+  /// leaving them guessing.
   private func scheduleWiFiFollowUpLocked(id: String, key: String, applied: MACAddress) {
     queue.asyncAfter(deadline: .now() + env.wifiFollowUpDelay) {
       self.readLocked()
       guard !self.busy.contains(id),
             let current = self.observed[id], current.deviceKey == key,
-            self.lastOperations[key]?.requested == applied,
+            self.lastOperations[key]?.requested == applied, self.notices[key] == nil,
             let address = current.currentMAC, address != applied else { return }
       self.notices[key] = .addressReplacedAfterReconnect(applied: applied, current: address)
       Log.daemon.notice("macOS replaced the MAC on \(id, privacy: .public) after reconnecting")
       self.publishLocked()
+    }
+  }
+
+  /// Wi-Fi that the app (or the user) rejoined after the change: drop the
+  /// "did not reconnect" notice, and say so if macOS swapped the address.
+  private func resolveNoticesLocked() {
+    for raw in observed.values where raw.isWiFiAssociated {
+      let key = raw.deviceKey
+      guard notices[key] == .wifiNotRejoined, !busy.contains(raw.id) else { continue }
+      if let applied = lastOperations[key]?.requested, lastOperations[key]?.state == .succeeded,
+         let current = raw.currentMAC, current != applied {
+        notices[key] = .addressReplacedAfterReconnect(applied: applied, current: current)
+      } else {
+        notices[key] = nil
+      }
     }
   }
 
@@ -356,8 +401,10 @@ final class DaemonCoordinator: @unchecked Sendable {
   // MARK: - Automation
 
   private func handleLocked(_ event: SystemEvent) {
+    guard !uninstalling else { return }
     let previous = observed.mapValues(managedLocked)
     readLocked()
+    resolveNoticesLocked()
     let current = observed.mapValues(managedLocked)
 
     switch event {
@@ -397,7 +444,7 @@ final class DaemonCoordinator: @unchecked Sendable {
 
   /// Starts at most one automatic write at a time; the rest wait for the next pass.
   private func runPendingLocked() {
-    guard !document.pendingRotations.isEmpty, !env.legacyServiceDetected() else { return }
+    guard !uninstalling, !document.pendingRotations.isEmpty, !env.legacyServiceDetected() else { return }
     let byKey = Dictionary(observed.values.map { ($0.deviceKey, $0) }, uniquingKeysWith: { first, _ in first })
     for key in document.pendingRotations.keys.sorted() {
       guard document.policies[key] == .random else {
@@ -479,7 +526,7 @@ final class DaemonCoordinator: @unchecked Sendable {
   /// Writes only when something changed. A failed save is reported but never
   /// blocks the next action; it is retried on the next change or tick.
   private func persistLocked() {
-    guard document != savedDocument else { return }
+    guard !uninstalling, document != savedDocument else { return }
     do {
       try env.store.save(document)
       savedDocument = document

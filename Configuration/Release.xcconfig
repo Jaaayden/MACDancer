@@ -2,4 +2,14 @@
 
 DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
 SWIFT_COMPILATION_MODE = wholemodule
-SWIFT_OPTIMIZATION_LEVEL = -O
+
+// Small binaries: optimize for size (this app is never CPU bound), drop
+// unused code, and strip symbols from the shipped executables. Symbols stay
+// in the dSYM for crash reports.
+SWIFT_OPTIMIZATION_LEVEL = -Osize
+DEAD_CODE_STRIPPING = YES
+DEPLOYMENT_POSTPROCESSING = YES
+STRIP_INSTALLED_PRODUCT = YES
+STRIP_STYLE = all
+STRIP_SWIFT_SYMBOLS = YES
+COPY_PHASE_STRIP = NO

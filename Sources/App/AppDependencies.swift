@@ -52,3 +52,17 @@ struct BackgroundInterfaceReader: LocalInterfaceReading {
     try await Task.detached(priority: .userInitiated) { try reader.interfaces() }.value
   }
 }
+
+/// The last steps of "Uninstall MACDancer", after the daemon is gone.
+@MainActor
+protocol AppRemoving: AnyObject {
+  /// True while the daemon's root-owned folder still exists.
+  func serviceDataExists() -> Bool
+  /// Deletes that folder with an administrator prompt. Only used when the
+  /// daemon could not erase it itself (for example because it was not running).
+  func removeServiceDataWithPrompt() async throws
+  /// Moves the app to the Trash, removes this user's MACDancer preferences,
+  /// caches and saved window state once the app has quit, and quits.
+  func trashAppAndQuit() async throws
+}
+

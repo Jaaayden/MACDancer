@@ -52,6 +52,8 @@ final class FakeSystem: InterfaceReading, MACWriting, @unchecked Sendable {
   private(set) var writes: [(String, MACAddress, Bool)] = []
   var nextWriteError: MACDancerError?
   var readFails = false
+  var rejoinFails = false
+  var replaceOnRejoin: MACAddress?
 
   init(_ interfaces: [InterfaceSnapshot]) {
     state = Dictionary(uniqueKeysWithValues: interfaces.map { ($0.id, $0) })
@@ -77,8 +79,14 @@ final class FakeSystem: InterfaceReading, MACWriting, @unchecked Sendable {
       }
       let disconnected = state[interface.bsdName]?.isWiFiAssociated == true
       state[interface.bsdName]?.currentMAC = target
-      state[interface.bsdName]?.isWiFiAssociated = false
-      return MACWriteOutcome(observed: target, error: nil, disconnectedWiFi: disconnected)
+      guard disconnected else { return MACWriteOutcome(observed: target, error: nil) }
+      // Like the real writer: leave, write, rejoin.
+      state[interface.bsdName]?.isWiFiAssociated = !rejoinFails
+      if let replacement = replaceOnRejoin, !rejoinFails { state[interface.bsdName]?.currentMAC = replacement }
+      return MACWriteOutcome(
+        observed: target, error: nil, disconnectedWiFi: true,
+        rejoinedWiFi: !rejoinFails, replacedOnRejoin: rejoinFails ? nil : replaceOnRejoin
+      )
     }
   }
 
@@ -97,6 +105,12 @@ final class MemoryStore: ConfigurationStoring {
     if failSaves { throw MACDancerError.persistence("disk full") }
     self.document = document
     saves += 1
+  }
+
+  private(set) var erased = false
+  func erase() throws {
+    document = ConfigurationDocument()
+    erased = true
   }
 }
 
